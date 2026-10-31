@@ -1,0 +1,14 @@
+{
+  "name": "@saas-rsa/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure domain logic: BCEA compliance, pay segmentation, SA payroll (PAYE/UIF/SDL/ETI), tips and the log book hash chain.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

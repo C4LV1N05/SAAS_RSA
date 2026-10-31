@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Domain engine tests (BCEA, PAYE/UIF/SDL/ETI, tips, hash chain)
+        run: pnpm --filter @saas-rsa/domain test
+      - name: Worker tests
+        run: pnpm --filter @saas-rsa/worker test
+      - run: pnpm build
+
+  integration:
+    name: Migrations, RLS and API tests (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    needs: checks
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: saas_owner
+          POSTGRES_PASSWORD: saas_owner
+          POSTGRES_DB: saas_rsa
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U saas_owner -d saas_rsa"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_OWNER_URL: postgres://saas_owner:saas_owner@localhost:5432/saas_rsa
+      # The API connects as saas_app, which is subject to RLS; the tests use it too.
+      DATABASE_URL: postgres://saas_app:saas_app@localhost:5432/saas_rsa
+      APP_DB_PASSWORD: saas_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        run: pnpm db:migrate
+      - name: Re-apply migrations (must be a no-op)
+        run: pnpm db:migrate
+      - name: Seed national rules and public holidays
+        run: pnpm --filter @saas-rsa/db seed
+      - name: Row-level security tests (tenant isolation as saas_app)
+        run: pnpm --filter @saas-rsa/db test
+      - name: End-to-end API tests
+        run: pnpm --filter @saas-rsa/api test
+
+  images:
+    name: Build container images
+    runs-on: ubuntu-latest
+    needs: integration
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [api, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name (registry names must be lowercase)
+        id: meta
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.app }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: APP=${{ matrix.app }}
+          # Pull requests build only; pushes to main also publish the image.
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
+            ${{ steps.meta.outputs.image }}:main
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}

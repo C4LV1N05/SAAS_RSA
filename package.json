@@ -1,0 +1,31 @@
+{
+  "name": "saas-rsa",
+  "private": true,
+  "version": "0.1.0",
+  "description": "South African hospitality workforce platform: scheduling, time clocking, BCEA compliance, payroll, tips and manager log book.",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm --filter @saas-rsa/api --filter @saas-rsa/worker build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:unit": "pnpm --filter @saas-rsa/domain test",
+    "db:migrate": "pnpm --filter @saas-rsa/db migrate",
+    "dev:api": "pnpm --filter @saas-rsa/api dev",
+    "dev:worker": "pnpm --filter @saas-rsa/worker dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
