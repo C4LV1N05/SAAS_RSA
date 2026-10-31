@@ -32,9 +32,9 @@ jobs:
       - run: pnpm build
       - name: Compile Azure infrastructure (Bicep)
         run: |
-          curl -sSfL -o /usr/local/bin/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
-          chmod +x /usr/local/bin/bicep
-          bicep build infra/azure/main.bicep --stdout > /dev/null
+          curl -sSfL -o "$RUNNER_TEMP/bicep" https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x "$RUNNER_TEMP/bicep"
+          "$RUNNER_TEMP/bicep" build infra/azure/main.bicep --stdout > /dev/null
 
   integration:
     name: Migrations, RLS and API tests (PostgreSQL 16)
