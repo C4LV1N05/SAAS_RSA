@@ -2,6 +2,8 @@
 
 A South African workforce platform for restaurants and hospitality, modelled on 7shifts and rebuilt around South African law: the shift a manager schedules becomes the hour an employee clocks, the rand they are paid, and the line SARS receives.
 
+**Stack:** TypeScript · Fastify · PostgreSQL 16 with row-level security · Auth0 · Twilio (WhatsApp, SMS) · Azure Container Apps in South Africa North.
+
 | Pillar | Module | Status |
 | --- | --- | --- |
 | Schedule | Scheduling (drafts, publish, rotation patterns) | API + schema |
@@ -16,14 +18,18 @@ A South African workforce platform for restaurants and hospitality, modelled on 
 ```
 apps/
   api/        Fastify REST API (Zod validation, JWT auth, tenant-scoped transactions)
-  worker/     BullMQ notification worker (WhatsApp -> SMS fallback)
+  worker/     Notification worker: delivers the PostgreSQL outbox via Twilio (WhatsApp -> SMS)
 packages/
   domain/     Pure TypeScript: BCEA segmentation + checks, SA payroll, tips, hash chain, rule registry
   db/         Drizzle schema, migration runner, seed, withTenant()
+infra/
+  azure/      Bicep: PostgreSQL, Container Apps (api, worker), migrate job
+  auth0/      Post-Login Action that adds tenant claims to access tokens
 db/
   migrations/ SQL source of truth: tables, RLS policies, immutability triggers
 docs/
   ARCHITECTURE.md   Decisions, assumptions awaiting sign-off, next steps
+  DEPLOY_AZURE.md   One-time Azure, Auth0 and Twilio setup
   BLUEPRINT.md      The original architectural blueprint
 ```
 
@@ -33,12 +39,12 @@ Requires Node 22, pnpm 10 and Docker.
 
 ```bash
 cp .env.example .env
-docker compose up -d                     # PostgreSQL 16 + Redis 7
+docker compose up -d                     # PostgreSQL 16
 pnpm install
-APP_DB_PASSWORD=saas_app pnpm db:migrate # creates tables, RLS and the saas_app role
+pnpm db:migrate                          # tables, RLS, and the saas_app / saas_worker roles
 pnpm --filter @saas-rsa/db seed          # national rule versions + public holidays
 pnpm dev:api                             # http://localhost:3000/health
-pnpm dev:worker                          # needs REDIS_URL
+DATABASE_URL=$DATABASE_WORKER_URL pnpm dev:worker   # logs messages until Twilio is set
 ```
 
 ## Tests
@@ -48,7 +54,8 @@ pnpm typecheck
 pnpm test:unit                           # domain engine: 50 tests, no database
 # With a migrated + seeded database (see .env.example):
 pnpm --filter @saas-rsa/db test          # RLS: tenant, location, role and append-only rules as saas_app
-pnpm --filter @saas-rsa/api test         # end-to-end: schedule -> publish -> clock -> approve -> tips -> payroll -> log book
+pnpm --filter @saas-rsa/api test         # end-to-end flow + Auth0 claims endpoint
+pnpm --filter @saas-rsa/worker test      # Twilio adapters; outbox delivery as saas_worker
 ```
 
 The payroll tests use hand-worked examples from the SARS 2026/27 tables. Validate them against SARS and a registered tax practitioner before the first live payroll.
@@ -60,6 +67,9 @@ The payroll tests use hand-worked examples from the SARS 2026/27 tables. Validat
 1. **checks**: install, typecheck, domain and worker tests, build
 2. **integration**: PostgreSQL 16 service; migrate twice (second run must be a no-op), seed, RLS tests, API tests
 3. **images**: builds `api` and `worker` containers; on `main` it publishes them to `ghcr.io/c4lv1n05/saas_rsa-api` and `-worker`
+4. **deploy** (on `main`, once Azure is set up): runs the migration job, rolls out the API and worker, then checks `/health`. See `docs/DEPLOY_AZURE.md`.
+
+`main` is protected: the first two stages must pass before changes merge.
 
 ## Annual maintenance
 

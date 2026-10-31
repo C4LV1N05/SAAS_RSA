@@ -8,17 +8,24 @@ import { registerComplianceRoutes } from './routes/compliance';
 import { registerPayrollRoutes } from './routes/payroll';
 import { registerTipRoutes } from './routes/tips';
 import { registerLogbookRoutes } from './routes/logbook';
+import { INTERNAL_AUTH_ROUTE, registerInternalAuthRoutes } from './routes/internal-auth';
 
 export interface AppOptions extends Deps {
   verify: Verifier;
+  /** Shared secret for the Auth0 Action's claims lookup; the route is off without it. */
+  authActionSecret?: string;
   logLevel?: string;
 }
 
-const PUBLIC_ROUTES = new Set(['/health']);
+/** Routes that do not take a user's bearer token. */
+const PUBLIC_ROUTES = new Set(['/health', INTERNAL_AUTH_ROUTE]);
 
 export function buildApp(options: AppOptions): FastifyInstance {
   const app = Fastify({
-    logger: { level: options.logLevel ?? 'info', redact: ['req.headers.authorization'] },
+    logger: {
+      level: options.logLevel ?? 'info',
+      redact: ['req.headers.authorization', 'req.headers["x-internal-secret"]'],
+    },
     genReqId: () => crypto.randomUUID(),
   });
 
@@ -39,7 +46,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
-  const deps: Deps = { db: options.db, notifier: options.notifier };
+  const deps: Deps = { db: options.db };
+  registerInternalAuthRoutes(app, options.db, options.authActionSecret);
   registerShiftRoutes(app, deps);
   registerTimeRoutes(app, deps);
   registerComplianceRoutes(app, deps);

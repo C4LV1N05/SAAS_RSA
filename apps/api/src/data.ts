@@ -1,10 +1,10 @@
 /** Query helpers shared by routes. Every function runs inside a tenant transaction. */
 import { and, asc, desc, eq, gte, inArray, isNotNull, lt, lte, ne } from 'drizzle-orm';
 import { schema, type TenantContext, type Tx } from '@saas-rsa/db';
-import type { EmployeeWorkProfile, WorkInterval } from '@saas-rsa/domain';
+import type { EmployeeWorkProfile, NotificationJob, WorkInterval } from '@saas-rsa/domain';
 import { HttpError, notFound } from './errors';
 
-const { employees, payRates, shifts, timeEntries, timeEntryBreaks, auditLog } = schema;
+const { employees, payRates, shifts, timeEntries, timeEntryBreaks, auditLog, notificationOutbox } = schema;
 
 export type EmployeeRow = typeof employees.$inferSelect;
 
@@ -115,4 +115,28 @@ export async function audit(
     after: entry.after ?? null,
     reason: entry.reason ?? null,
   });
+}
+
+/**
+ * Queue staff messages in the transactional outbox. They commit (or roll back)
+ * with the change that caused them; the worker delivers them. A repeated
+ * dedupe key is ignored, so retried requests never message anyone twice.
+ */
+export async function enqueueNotifications(tx: Tx, jobs: readonly NotificationJob[]): Promise<number> {
+  if (jobs.length === 0) return 0;
+  const inserted = await tx
+    .insert(notificationOutbox)
+    .values(
+      jobs.map((j) => ({
+        orgId: j.orgId,
+        recipient: j.recipient,
+        template: j.template,
+        params: j.params,
+        channels: j.channels,
+        dedupeKey: j.dedupeKey,
+      })),
+    )
+    .onConflictDoNothing({ target: notificationOutbox.dedupeKey })
+    .returning({ id: notificationOutbox.id });
+  return inserted.length;
 }

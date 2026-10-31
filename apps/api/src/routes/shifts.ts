@@ -13,7 +13,7 @@ import {
   type NotificationJob,
 } from '@saas-rsa/domain';
 import { requirePermission, tenantTx, type Deps } from '../context';
-import { audit, getEmployee, hourlyRateOn, shiftIntervals, workProfile } from '../data';
+import { audit, enqueueNotifications, getEmployee, hourlyRateOn, shiftIntervals, workProfile } from '../data';
 import { HttpError, notFound } from '../errors';
 import { can } from '../permissions';
 
@@ -161,7 +161,7 @@ export function registerShiftRoutes(app: FastifyInstance, deps: Deps) {
         after: { shiftIds: body.shiftIds, overrides: body.overrides },
       });
 
-      // Who to tell: employees with a linked user and phone number.
+      // Who to tell: employees with a linked user. Queued in this transaction.
       const employeeIds = [...new Set(targets.map((s) => s.employeeId).filter((x): x is string => !!x))];
       const recipients = employeeIds.length
         ? await tx
@@ -170,20 +170,19 @@ export function registerShiftRoutes(app: FastifyInstance, deps: Deps) {
             .innerJoin(users, eq(users.id, employees.userId))
             .where(inArray(employees.id, employeeIds))
         : [];
-      return { findings, recipients, targets };
+      const batchKey = createHash('sha256').update([...body.shiftIds].sort().join(',')).digest('hex').slice(0, 16);
+      const jobs: NotificationJob[] = recipients.map((r) => ({
+        orgId: auth.orgId,
+        recipient: { employeeId: r.employeeId, userId: r.userId, ...(r.phone ? { phoneE164: r.phone } : {}), displayName: r.name },
+        template: 'schedule_published',
+        params: { shifts: targets.filter((s) => s.employeeId === r.employeeId).length },
+        channels: ['whatsapp', 'sms'],
+        dedupeKey: `schedule_published:${r.employeeId}:${batchKey}`,
+      }));
+      const notified = await enqueueNotifications(tx, jobs);
+      return { findings, notified };
     });
 
-    const batchKey = createHash('sha256').update([...body.shiftIds].sort().join(',')).digest('hex').slice(0, 16);
-    const jobs: NotificationJob[] = result.recipients.map((r) => ({
-      orgId: auth.orgId,
-      recipient: { employeeId: r.employeeId, userId: r.userId, ...(r.phone ? { phoneE164: r.phone } : {}), displayName: r.name },
-      template: 'schedule_published',
-      params: { shifts: result.targets.filter((s) => s.employeeId === r.employeeId).length },
-      channels: ['whatsapp', 'sms', 'push'],
-      dedupeKey: `schedule_published:${r.employeeId}:${batchKey}`,
-    }));
-    await deps.notifier.enqueue(jobs);
-
-    return { published: body.shiftIds.length, findings: result.findings, notified: jobs.length };
+    return { published: body.shiftIds.length, findings: result.findings, notified: result.notified };
   });
 }

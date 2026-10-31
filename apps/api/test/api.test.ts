@@ -7,7 +7,6 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Role } from '@saas-rsa/db';
-import type { NotificationJob } from '@saas-rsa/domain';
 import { buildApp } from '../src/app';
 import { createVerifier, signDevToken } from '../src/auth';
 import type { FastifyInstance } from 'fastify';
@@ -15,6 +14,7 @@ import type { FastifyInstance } from 'fastify';
 const OWNER_URL = process.env.DATABASE_OWNER_URL;
 const APP_URL = process.env.DATABASE_URL;
 const SECRET = 'test-secret-that-is-at-least-32-characters-long';
+const ACTION_SECRET = 'auth0-action-secret-at-least-32-characters';
 
 describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
   const ids = {
@@ -32,8 +32,8 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
     pool: randomUUID(),
   };
   const phone = `+2782${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
-  const jobs: NotificationJob[] = [];
   let app: FastifyInstance;
+  let ownerPool: pg.Pool;
   let closeDb: () => Promise<void>;
   const tokens = {} as Record<'manager' | 'staff' | 'payroll' | 'ownerB', string>;
 
@@ -42,6 +42,7 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
 
   beforeAll(async () => {
     const owner = new pg.Pool({ connectionString: OWNER_URL });
+    ownerPool = owner;
     const asOwner = async (orgId: string, userId: string, sql: Array<[string, unknown[]]>) => {
       const c = await owner.connect();
       try {
@@ -75,14 +76,14 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
       ['insert into organisations (id, legal_name) values ($1, $2)', [ids.orgB, 'Other Group']],
       ['insert into users (id, display_name) values ($1, $2)', [ids.ownerB, 'Owner B']],
     ]);
-    await owner.end();
 
     const { db, pool } = createDb(APP_URL!);
     closeDb = () => pool.end();
     const verify = createVerifier({
-      NODE_ENV: 'test', PORT: 0, LOG_LEVEL: 'silent', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api', AUTH_DEV_SECRET: SECRET,
+      NODE_ENV: 'test', PORT: 0, LOG_LEVEL: 'silent', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api',
+      AUTH_CLAIM_NAMESPACE: 'https://saas-rsa.app/', AUTH_DEV_SECRET: SECRET,
     });
-    app = buildApp({ db, verify, notifier: { enqueue: async (j) => void jobs.push(...j) }, logLevel: 'silent' });
+    app = buildApp({ db, verify, authActionSecret: ACTION_SECRET, logLevel: 'silent' });
 
     const sign = (userId: string, role: Role, orgId = ids.org, locationIds = [ids.loc]) =>
       signDevToken({ userId, role, orgId, locationIds }, SECRET);
@@ -95,7 +96,22 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
   afterAll(async () => {
     await app?.close();
     await closeDb?.();
+    await ownerPool?.end();
   });
+
+  /** Read the outbox as the owner with the org's context (FORCE RLS applies to the owner too). */
+  const outboxRows = async () => {
+    const c = await ownerPool.connect();
+    try {
+      await c.query('begin');
+      await c.query(`select set_config('app.org_id', $1, true), set_config('app.role', 'owner', true)`, [ids.org]);
+      const r = await c.query('select template, recipient, params, status from notification_outbox');
+      await c.query('commit');
+      return r.rows;
+    } finally {
+      c.release();
+    }
+  };
 
   it('requires a token except for /health', async () => {
     expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200);
@@ -134,7 +150,10 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
     });
     expect(ok.statusCode).toBe(200);
     expect(ok.json()).toMatchObject({ published: 6, notified: 1 });
-    expect(jobs[0]).toMatchObject({ template: 'schedule_published', recipient: { phoneE164: phone }, params: { shifts: 6 } });
+    // The message is queued in the outbox, committed with the publish.
+    expect(await outboxRows()).toEqual([
+      expect.objectContaining({ template: 'schedule_published', status: 'queued', recipient: expect.objectContaining({ phoneE164: phone }), params: { shifts: 6 } }),
+    ]);
 
     const staffView = await call(tokens.staff, 'GET', '/v1/shifts?from=2026-10-26T00:00:00%2B02:00&to=2026-11-02T00:00:00%2B02:00');
     expect(staffView.json().shifts).toHaveLength(6);
@@ -219,5 +238,31 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
   it("cannot see another organisation's employees", async () => {
     const res = await call(tokens.ownerB, 'POST', '/v1/compliance/employee-week', { employeeId: ids.employee, date: '2026-10-27' });
     expect(res.statusCode).toBe(404);
+  });
+
+  describe('Auth0 claims endpoint', () => {
+    const claims = (body: object, secret = ACTION_SECRET) =>
+      app.inject({ method: 'POST', url: '/internal/auth/claims', headers: { 'x-internal-secret': secret }, payload: body });
+
+    it('rejects a wrong secret', async () => {
+      expect((await claims({ sub: 'sms|1' }, 'x'.repeat(40))).statusCode).toBe(401);
+    });
+
+    it('links an invited employee by verified phone on first login, then by subject', async () => {
+      const sub = `sms|${randomUUID()}`;
+      const first = await claims({ sub, phone, phoneVerified: true });
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toMatchObject({ userId: ids.staffUser, orgId: ids.org, role: 'employee', locationIds: [ids.loc] });
+      // Second login: found by the linked subject, no phone needed.
+      expect((await claims({ sub })).json()).toMatchObject({ userId: ids.staffUser });
+    });
+
+    it('does not link by an unverified phone', async () => {
+      expect((await claims({ sub: `sms|${randomUUID()}`, phone: '+27829999999', phoneVerified: false })).statusCode).toBe(403);
+    });
+
+    it('denies logins with no membership', async () => {
+      expect((await claims({ sub: `auth0|${randomUUID()}`, email: 'stranger@example.com', emailVerified: true })).statusCode).toBe(403);
+    });
   });
 });

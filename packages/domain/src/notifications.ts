@@ -1,7 +1,9 @@
-/** Contract between the API (producer) and the worker (consumer) for staff messages. */
-export const NOTIFICATION_QUEUE = 'notifications';
+/**
+ * Contract between the API (writes rows to notification_outbox) and the worker
+ * (claims and delivers them) for staff messages.
+ */
 
-/** Order of preference: WhatsApp first, SMS fallback, then push and email. */
+/** Order of preference: WhatsApp first, then SMS. Push and email are reserved for later. */
 export type NotificationChannel = 'whatsapp' | 'sms' | 'push' | 'email';
 
 export type NotificationTemplate = 'schedule_published' | 'shift_changed' | 'payslip_ready' | 'logbook_ack_required';

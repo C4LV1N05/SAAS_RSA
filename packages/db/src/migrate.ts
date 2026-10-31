@@ -4,8 +4,10 @@
  *
  *   pnpm db:migrate
  *
- * Optional: APP_DB_PASSWORD gives the saas_app role a login password (local/dev).
- * In production, manage that role's credentials in your secrets manager.
+ * Optional: APP_DB_PASSWORD and WORKER_DB_PASSWORD give the saas_app and
+ * saas_worker roles a login password. In production these come from the
+ * deployment's secrets (see infra/azure). MIGRATIONS_DIR overrides where the SQL
+ * files are read from (the container image ships them at /app/migrations).
  */
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -13,7 +15,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
-export const MIGRATIONS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../../../db/migrations');
+export const MIGRATIONS_DIR =
+  process.env.MIGRATIONS_DIR ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../../db/migrations');
 
 export async function migrate(connectionString: string, log: (msg: string) => void = console.log): Promise<string[]> {
   const client = new pg.Client({ connectionString });
@@ -54,10 +57,13 @@ export async function migrate(connectionString: string, log: (msg: string) => vo
         throw new Error(`Migration ${file} failed: ${(err as Error).message}`);
       }
     }
-    const appPassword = process.env.APP_DB_PASSWORD;
-    if (appPassword) {
-      await client.query(`alter role saas_app login password ${pg.escapeLiteral(appPassword)}`);
-      log('saas_app login enabled');
+    for (const [role, password] of [
+      ['saas_app', process.env.APP_DB_PASSWORD],
+      ['saas_worker', process.env.WORKER_DB_PASSWORD],
+    ] as const) {
+      if (!password) continue;
+      await client.query(`alter role ${role} login password ${pg.escapeLiteral(password)}`);
+      log(`${role} login enabled`);
     }
   } finally {
     await client.end();

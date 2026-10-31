@@ -47,6 +47,7 @@ export const users = pgTable('users', {
   phoneE164: text('phone_e164'),
   email: text('email'),
   displayName: text('display_name').notNull(),
+  authSubject: text('auth_subject'),
 });
 
 export const memberships = pgTable('memberships', {
@@ -240,4 +241,22 @@ export const logAcknowledgements = pgTable('log_acknowledgements', {
   managerLogId: uuid('manager_log_id').notNull(),
   userId: uuid('user_id').notNull(),
   acknowledgedAt: ts('acknowledged_at').notNull().defaultNow(),
+});
+
+export const notificationOutbox = pgTable('notification_outbox', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  recipient: jsonb('recipient').notNull(),
+  template: text('template').notNull(),
+  params: jsonb('params').notNull().default({}),
+  channels: text('channels').array().notNull(),
+  dedupeKey: text('dedupe_key').notNull(),
+  status: text('status').notNull().default('queued'),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: ts('next_attempt_at').notNull().defaultNow(),
+  deliveredVia: text('delivered_via'),
+  providerRef: text('provider_ref'),
+  lastError: text('last_error'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  sentAt: ts('sent_at'),
 });

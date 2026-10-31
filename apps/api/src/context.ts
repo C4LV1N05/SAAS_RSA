@@ -1,6 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { withTenant, type Database, type TenantContext, type Tx } from '@saas-rsa/db';
-import type { NotificationJob } from '@saas-rsa/domain';
 import { HttpError } from './errors';
 import { can, type Permission } from './permissions';
 
@@ -10,15 +9,8 @@ declare module 'fastify' {
   }
 }
 
-export interface Notifier {
-  enqueue(jobs: NotificationJob[]): Promise<void>;
-}
-
-export const noopNotifier: Notifier = { enqueue: async () => {} };
-
 export interface Deps {
   db: Database;
-  notifier: Notifier;
 }
 
 export function authOf(request: FastifyRequest): TenantContext {

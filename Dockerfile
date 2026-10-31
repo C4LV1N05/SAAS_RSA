@@ -20,6 +20,9 @@ FROM node:22-alpine
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out ./
+# SQL migrations for the release job (api image: node dist/migrate.js).
+COPY --from=build /repo/db/migrations ./migrations
+ENV MIGRATIONS_DIR=/app/migrations
 USER node
 # Both apps bundle to dist/index.js.
 CMD ["node", "dist/index.js"]

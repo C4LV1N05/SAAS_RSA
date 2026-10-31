@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namePrefix": { "value": "saasrsa" },
+    "apiImage": { "value": "ghcr.io/c4lv1n05/saas_rsa-api:main" },
+    "workerImage": { "value": "ghcr.io/c4lv1n05/saas_rsa-worker:main" },
+    "auth0Domain": { "value": "REPLACE-WITH-YOUR-TENANT.eu.auth0.com" },
+    "auth0Audience": { "value": "https://api.saas-rsa.app" },
+    "twilioAccountSid": { "value": "" },
+    "twilioSmsFrom": { "value": "" },
+    "twilioWhatsappFrom": { "value": "" },
+    "twilioWhatsappContentSids": { "value": "{}" }
+  }
+}

@@ -19,10 +19,10 @@ This codebase implements the blueprint in `docs/BLUEPRINT.md` with the changes f
 
 ## Decisions for the outstanding tasks
 
-- **Task 1, auth:** a managed identity provider issues short-lived JWTs; the API only verifies them (JWKS in production, HS256 dev secret locally). Claims: `sub`, `org_id`, `role`, `location_ids`. RBAC runs at the edge (`permissions.ts`) and again in RLS.
+- **Task 1, auth (Auth0):** Auth0 issues short-lived RS256 access tokens; the API verifies them against the tenant JWKS, issuer and audience. A Post-Login Action calls `POST /internal/auth/claims` (shared secret) and adds namespaced claims `user_id`, `org_id`, `role`, `location_ids`. Staff sign in by SMS passwordless; the first login links the Auth0 account to the invited user by verified phone (`app.resolve_login`). RBAC runs at the edge (`permissions.ts`) and again in RLS.
 - **Task 2, API:** TypeScript, Fastify, REST, Zod, Drizzle on node-postgres. Each request is one transaction with tenant context. Clock actions require an `Idempotency-Key`.
-- **Task 3, notifications:** BullMQ queue written by the API, consumed by a long-running worker; WhatsApp then SMS then push. Jobs are deduplicated by key.
-- **Task 4, infrastructure:** containers for `api` and `worker`; PostgreSQL in a South African region (AWS af-south-1 or Azure South Africa North). If the web app runs on Vercel, pin its functions to `cpt1`. Migrations run as a release step with the owner credentials; the services use `saas_app`.
+- **Task 3, notifications (Twilio):** a transactional outbox (`notification_outbox`) written in the same transaction as the change, so a rolled-back publish sends nothing. The worker connects as `saas_worker`, which can only call `app.claim_notifications` (SKIP LOCKED, leased) and `app.complete_notification` (exponential backoff, 6 attempts). Delivery: WhatsApp via approved Twilio Content templates, falling back to SMS. Redis was dropped because new Azure Cache for Redis instances are no longer available to new customers.
+- **Task 4, infrastructure (Azure):** `infra/azure/main.bicep` in South Africa North: PostgreSQL 16 Flexible Server, Container Apps for the API and worker, and a manual migration job using the API image. CI deploys on every green push to `main` via OIDC. See `docs/DEPLOY_AZURE.md`.
 - **Task 5, integrations:** EMP201 is captured on SARS eFiling, so the system produces its values (`emp201Totals`), not a file. EMP501/IRP5 export to the SARS BRS and Xero/Sage journals build on the coded payslip lines.
 
 ## Assumptions that need sign-off before go-live
@@ -46,4 +46,5 @@ Registered tax practitioner:
 - Rotation pattern expansion into shifts
 - Field-level encryption for ID, tax and bank numbers (columns exist as `bytea`)
 - Real-time manager alerts (SSE or a managed realtime service)
+- Twilio delivery status callbacks (the outbox records the message SID for this)
 - Web and mobile clients

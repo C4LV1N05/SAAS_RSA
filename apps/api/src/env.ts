@@ -1,22 +1,31 @@
 import { z } from 'zod';
 
+const optional = <T extends z.ZodTypeAny>(schema: T) => schema.optional().or(z.literal('').transform(() => undefined));
+
 const EnvSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().default(3000),
     LOG_LEVEL: z.string().default('info'),
     DATABASE_URL: z.string().url(),
-    REDIS_URL: z.string().optional(),
-    AUTH_JWKS_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
-    AUTH_ISSUER: z.string().optional().or(z.literal('').transform(() => undefined)),
+    // Auth0: https://<tenant>.<region>.auth0.com/.well-known/jwks.json
+    AUTH_JWKS_URL: optional(z.string().url()),
+    // Auth0: https://<tenant>.<region>.auth0.com/ (trailing slash included)
+    AUTH_ISSUER: optional(z.string()),
+    // Auth0: the API Identifier you created in the Auth0 dashboard
     AUTH_AUDIENCE: z.string().default('saas-rsa-api'),
-    AUTH_DEV_SECRET: z.string().min(32).optional(),
+    // Prefix the Auth0 Post-Login Action uses for custom claims
+    AUTH_CLAIM_NAMESPACE: z.string().default('https://saas-rsa.app/'),
+    // Shared secret the Auth0 Action sends to /internal/auth/claims
+    AUTH_ACTION_SECRET: optional(z.string().min(32)),
+    // Local development only: HS256 shared secret used when AUTH_JWKS_URL is empty
+    AUTH_DEV_SECRET: optional(z.string().min(32)),
   })
   .refine((e) => e.AUTH_JWKS_URL || e.AUTH_DEV_SECRET, {
     message: 'Set AUTH_JWKS_URL (production) or AUTH_DEV_SECRET (local development)',
   })
-  .refine((e) => e.NODE_ENV !== 'production' || e.AUTH_JWKS_URL, {
-    message: 'AUTH_JWKS_URL is required in production; the dev secret is for local use only',
+  .refine((e) => e.NODE_ENV !== 'production' || (e.AUTH_JWKS_URL && e.AUTH_ISSUER), {
+    message: 'AUTH_JWKS_URL and AUTH_ISSUER are required in production; the dev secret is for local use only',
   });
 
 export type Env = z.infer<typeof EnvSchema>;

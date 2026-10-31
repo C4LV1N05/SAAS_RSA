@@ -15,10 +15,10 @@
   },
   "dependencies": {
     "@saas-rsa/domain": "workspace:*",
-    "bullmq": "^5.34.0",
-    "ioredis": "^5.4.2"
+    "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.11.10",
     "tsup": "^8.3.5"
   }
 }
