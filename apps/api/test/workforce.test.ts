@@ -33,7 +33,7 @@ describe.skipIf(!OWNER_URL || !APP_URL)('workforce screens API', () => {
   let closeDb: () => Promise<void>;
   const tokens = {} as Record<'manager' | 'staff' | 'staff2' | 'owner', string>;
 
-  const call = (token: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown, headers: Record<string, string> = {}) =>
+  const call = (token: string, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.inject({ method, url, headers: { authorization: `Bearer ${token}`, ...headers }, ...(body ? { payload: body as object } : {}) });
 
   // Shifts tomorrow and the day after, so they count as upcoming on /v1/me.

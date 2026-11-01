@@ -27,7 +27,7 @@ describe('field encryption', () => {
   it('detects tampering', () => {
     const c = new FieldCipher([{ id: 'k1', key: key() }]);
     const blob = c.encrypt('8001015009087', aad);
-    blob[blob.length - 1] ^= 1;
+    blob[blob.length - 1] = blob[blob.length - 1]! ^ 1;
     expect(() => c.decrypt(blob, aad)).toThrow();
   });
 
