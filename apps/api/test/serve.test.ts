@@ -11,7 +11,13 @@ import { sql } from 'drizzle-orm';
 import { createDb, withTenant, type Database, type Role } from '@saas-rsa/db';
 import { buildApp } from '../src/app';
 import { createVerifier, signDevToken } from '../src/auth';
+import { loadEnv } from '../src/env';
 import { listenForServiceEvents, ServiceEventBus, type ServiceEvent } from '../src/events';
+import { LocalMediaStore } from '../src/media';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import sharp from 'sharp';
 
 const OWNER_URL = process.env.DATABASE_OWNER_URL;
 const APP_URL = process.env.DATABASE_URL;
@@ -31,7 +37,7 @@ describe.skipIf(!OWNER_URL || !APP_URL)('Serve: table ordering alongside the til
   const t = {} as Record<'owner' | 'manager' | 'waiter', string>;
   const state = {
     steakStock: '', rump: '', chenin: '', burger: '', table: '', tag: '', tipCode: '',
-    guestA: '', guestB: '', tab: '', rumpItem: '', payA: '', payB: '',
+    guestA: '', guestB: '', tab: '', rumpItem: '', payA: '', payB: '', rumpPhoto: '',
   };
 
   const staff = (token: string, method: 'GET' | 'POST' | 'PUT' | 'PATCH', url: string, body?: object, headers: Record<string, string> = {}) =>
@@ -73,11 +79,9 @@ describe.skipIf(!OWNER_URL || !APP_URL)('Serve: table ordering alongside the til
     db = created.db;
     const listener = listenForServiceEvents(APP_URL!, bus, { warn: () => {}, info: () => {} });
     bus.subscribe({ orgId: ids.org, locationId: ids.loc, send: (e) => events.push(e) });
-    const verify = createVerifier({
-      NODE_ENV: 'test', PORT: 0, LOG_LEVEL: 'silent', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api',
-      AUTH_CLAIM_NAMESPACE: 'https://saas-rsa.app/', GUEST_APP_URL: 'https://order.example', CORS_ORIGINS: '', AUTH_DEV_SECRET: SECRET,
-    });
-    app = buildApp({ db, verify, events: bus, guestAppUrl: 'https://order.example', logLevel: process.env.TEST_LOG ?? 'silent' });
+    const verify = createVerifier(loadEnv({ NODE_ENV: 'test', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api', AUTH_DEV_SECRET: SECRET }));
+    const media = new LocalMediaStore(await mkdtemp(join(tmpdir(), 'serve-media-')), 'http://api.test/media');
+    app = buildApp({ db, verify, events: bus, media, guestAppUrl: 'https://order.example', logLevel: process.env.TEST_LOG ?? 'silent' });
     closeAll = async () => {
       await app.close();
       await listener.close();
@@ -102,11 +106,11 @@ describe.skipIf(!OWNER_URL || !APP_URL)('Serve: table ordering alongside the til
     const steak = await staff(t.manager, 'POST', '/v1/inventory/items', { locationId: ids.loc, name: 'Rump steak 300g', onHand: 2, reorderLevel: 1 });
     state.steakStock = steak.json().item.id;
 
-    const add = async (name: string, priceCents: number, station: string, components: object[] = []) =>
-      (await staff(t.manager, 'POST', '/v1/menu/items', { locationId: ids.loc, categoryId: cat.json().category.id, name, priceCents, station, tillCode: name.slice(0, 4).toUpperCase(), components })).json().item.id;
-    state.rump = await add('Rump 300g', 21_500, 'kitchen', [{ inventoryItemId: state.steakStock, quantity: 1 }]);
-    state.chenin = await add('Glass of Chenin', 6_500, 'bar');
-    state.burger = await add('Beef burger', 14_000, 'kitchen');
+    const add = async (name: string, priceCents: number, station: string, sortOrder: number, components: object[] = []) =>
+      (await staff(t.manager, 'POST', '/v1/menu/items', { locationId: ids.loc, categoryId: cat.json().category.id, name, priceCents, station, sortOrder, tillCode: name.slice(0, 4).toUpperCase(), components })).json().item.id;
+    state.rump = await add('Rump 300g', 21_500, 'kitchen', 1, [{ inventoryItemId: state.steakStock, quantity: 1 }]);
+    state.chenin = await add('Glass of Chenin', 6_500, 'bar', 2);
+    state.burger = await add('Beef burger', 14_000, 'kitchen', 3);
 
     expect((await staff(t.waiter, 'POST', '/v1/menu/items', { locationId: ids.loc, name: 'x', priceCents: 1, station: 'bar' })).statusCode).toBe(403);
 
@@ -122,6 +126,29 @@ describe.skipIf(!OWNER_URL || !APP_URL)('Serve: table ordering alongside the til
     });
     expect(assign.statusCode).toBe(201);
     state.tipCode = (await staff(t.manager, 'POST', '/v1/tip-codes', { employeeId: ids.waiter2 })).json().token;
+  });
+
+  it('takes a dish photo from a manager and serves it to guests', async () => {
+    const png = await sharp({ create: { width: 900, height: 700, channels: 3, background: { r: 150, g: 70, b: 30 } } }).png().toBuffer();
+    const upload = (token: string, body: Buffer, type = 'image/png') =>
+      app.inject({ method: 'POST', url: `/v1/menu/items/${state.rump}/image`, headers: { authorization: `Bearer ${token}`, 'content-type': type }, payload: body });
+
+    expect((await upload(t.waiter, png)).statusCode).toBe(403);
+    expect((await upload(t.manager, Buffer.from('definitely not a photo'))).json().error.code).toBe('not_an_image');
+    expect((await upload(t.manager, Buffer.from('hello'), 'text/plain')).statusCode).toBe(415);
+
+    const ok = await upload(t.manager, png);
+    expect(ok.statusCode).toBe(201);
+    expect(ok.json().imageThumbUrl).toMatch(/^http:\/\/api\.test\/media\/.+-320\.webp$/);
+    const served = await app.inject({ method: 'GET', url: new URL(ok.json().imageUrl).pathname });
+    expect(served.headers['content-type']).toBe('image/webp');
+    expect((await sharp(served.rawPayload).metadata()).width).toBe(640);
+    state.rumpPhoto = ok.json().imageThumbUrl;
+
+    const staffMenu = (await staff(t.waiter, 'GET', `/v1/menu?locationId=${ids.loc}`)).json();
+    expect(staffMenu.items.map((i: { name: string; imageThumbUrl: string | null }) => [i.name, Boolean(i.imageThumbUrl)])).toEqual([
+      ['Rump 300g', true], ['Glass of Chenin', false], ['Beef burger', false],
+    ]);
   });
 
   it('opens one tab per table for every guest who scans it', async () => {
@@ -140,6 +167,8 @@ describe.skipIf(!OWNER_URL || !APP_URL)('Serve: table ordering alongside the til
     const menu = await guest(state.guestA, 'GET', '/menu');
     expect(menu.json().items.map((i: { name: string }) => i.name)).toEqual(['Rump 300g', 'Glass of Chenin', 'Beef burger']);
     expect(menu.json().items[0].soldOut).toBe(false);
+    expect(menu.json().items[0].imageThumbUrl).toBe(state.rumpPhoto);
+    expect(menu.json().items[1].imageThumbUrl).toBeNull();
 
     const order = await guest(state.guestA, 'POST', '/orders', { items: [{ menuItemId: state.rump, quantity: 1 }, { menuItemId: state.chenin, quantity: 2, notes: 'Well chilled' }] }, { 'idempotency-key': key() });
     expect(order.statusCode).toBe(201);

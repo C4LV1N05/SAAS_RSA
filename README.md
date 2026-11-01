@@ -62,7 +62,7 @@ pnpm dev:web                             # http://localhost:5173
 DATABASE_OWNER_URL=... AUTH_DEV_SECRET=... GUEST_APP_URL=http://localhost:5173 pnpm demo
 ```
 
-Open a table link in a phone-sized window to order, and `http://localhost:5173/staff` in another window (paste the waiter token) to confirm the table, watch the kitchen and bar screens, and record payments.
+Open a table link in a phone-sized window to order, and `http://localhost:5173/staff` in another window (paste the waiter token) to confirm the table, watch the kitchen and bar screens, and record payments. Paste the manager token to open **Menu**, where you can add or change dish photos. The demo dishes come with illustrated photos, saved in `.media/` and served by the API.
 
 ## Tests
 

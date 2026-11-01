@@ -14,8 +14,10 @@ export class ApiError extends Error {
 }
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
+  /** Send a file as the raw body (e.g. a photo) instead of JSON. */
+  file?: Blob;
   /** Staff bearer token. */
   token?: string;
   /** Guest table session token. */
@@ -27,7 +29,8 @@ export interface RequestOptions {
 
 export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  if (opts.body !== undefined) headers['content-type'] = 'application/json';
+  if (opts.file) headers['content-type'] = opts.file.type || 'application/octet-stream';
+  else if (opts.body !== undefined) headers['content-type'] = 'application/json';
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
   if (opts.guestSession) headers['x-guest-session'] = opts.guestSession;
   if (opts.idempotencyKey) headers['idempotency-key'] = opts.idempotencyKey;
@@ -35,9 +38,9 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   let res: Response;
   try {
     res = await fetch(`${API_URL}${path}`, {
-      method: opts.method ?? (opts.body === undefined ? 'GET' : 'POST'),
+      method: opts.method ?? (opts.body === undefined && !opts.file ? 'GET' : 'POST'),
       headers,
-      ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+      ...(opts.file ? { body: opts.file } : opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
       ...(opts.signal ? { signal: opts.signal } : {}),
     });
   } catch (err) {

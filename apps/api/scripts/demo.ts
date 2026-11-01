@@ -9,7 +9,11 @@
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import pg from 'pg';
+import sharp from 'sharp';
 import { signDevToken } from '../src/auth';
+import { loadEnv } from '../src/env';
+import { createMediaStore, menuImageKeys, processMenuImage } from '../src/media';
+import { DEMO_IMAGES } from './demo-images';
 
 const ownerUrl = process.env.DATABASE_OWNER_URL;
 const secret = process.env.AUTH_DEV_SECRET;
@@ -25,6 +29,10 @@ const org = id();
 const loc = id();
 const users = { owner: id(), manager: id(), waiter: id(), chef: id() };
 const employees = { waiter: id(), chef: id(), waiter2: id() };
+
+// Photos go to the same store the API serves from (MEDIA_* settings; local folder by default).
+const env = loadEnv({ ...process.env, DATABASE_URL: process.env.DATABASE_URL ?? 'postgres://unused@localhost/x' });
+const media = createMediaStore(env);
 
 const pool = new pg.Pool({ connectionString: ownerUrl });
 const c = await pool.connect();
@@ -63,6 +71,14 @@ try {
     )).rows[0].id as string;
     for (const [inv, qty] of components) {
       await c.query('insert into menu_item_components (menu_item_id, inventory_item_id, org_id, quantity) values ($1, $2, $3, $4)', [menuId, inv, org, qty]);
+    }
+    const svg = DEMO_IMAGES[name];
+    if (svg) {
+      const image = await processMenuImage(await sharp(Buffer.from(svg)).png().toBuffer());
+      const keys = menuImageKeys(org, menuId, image.hash);
+      const full = await media.put(keys.full, image.full, 'image/webp');
+      const thumb = await media.put(keys.thumb, image.thumb, 'image/webp');
+      await c.query('update menu_items set image_url = $1, image_thumb_url = $2 where id = $3', [full, thumb, menuId]);
     }
   };
   await dish(starters, 'Boerewors bites', 'Grilled wors, chakalaka dip', 8_500, 'kitchen', 1);

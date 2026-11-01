@@ -34,6 +34,7 @@ See `docs/SERVE.md` for the flow, guest API and till webhook contract. Key decis
 - **Split bills without double payment.** A payment request claims its items (or amount) immediately, under a per-tab advisory lock; once a share-of-bill payment exists, item mode closes for that tab (`packages/domain/src/serve/bill.ts`).
 - **Stock in the same transaction.** `app.move_stock` locks inventory rows in a fixed order, refuses to go below zero, and writes an append-only movement ledger; voids return stock.
 - **Live screens without Redis.** A trigger on `order_items` calls `pg_notify`; each API replica holds one LISTEN connection and streams events to kitchen and bar screens over SSE (ids only; screens re-fetch through RLS).
+- **Menu photos** are re-encoded by the API with sharp into square 640 px and 320 px WebP (metadata and GPS removed), named by content hash, and stored in a public Azure Blob container in South Africa North with year-long caching. Uploads arrive as a raw body (no multipart parser); originals are never kept.
 - **VAT** is a rule version (`vat.rate_bp` = 1500) applied to VAT-inclusive menu prices.
 - **Screens** (`apps/web`): a static React app on Azure Static Web Apps. Guest pages use the table session header; staff pages use Auth0 tokens and read the live stream with `fetch` (EventSource cannot send headers). The API allows the web app's origin via CORS.
 

@@ -22,6 +22,12 @@ const EnvSchema = z
     GUEST_APP_URL: z.string().url().default('https://order.saas-rsa.app'),
     // Extra browser origins allowed to call the API (comma-separated). The guest app's origin is always allowed.
     CORS_ORIGINS: z.string().default(''),
+    // Menu photos: 'azure' (Blob Storage) in production, 'local' (a folder served at /media) for development
+    MEDIA_STORE: z.enum(['local', 'azure']).default('local'),
+    MEDIA_DIR: z.string().default('.media'),
+    MEDIA_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3000/media'),
+    AZURE_STORAGE_CONNECTION_STRING: optional(z.string()),
+    MEDIA_CONTAINER: z.string().default('menu-images'),
     // Local development only: HS256 shared secret used when AUTH_JWKS_URL is empty
     AUTH_DEV_SECRET: optional(z.string().min(32)),
   })

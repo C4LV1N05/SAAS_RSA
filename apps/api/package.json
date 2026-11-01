@@ -15,6 +15,7 @@
     "demo": "tsx scripts/demo.ts"
   },
   "dependencies": {
+    "@azure/storage-blob": "^12.34.0",
     "@fastify/cors": "^11.3.1",
     "@saas-rsa/db": "workspace:*",
     "@saas-rsa/domain": "workspace:*",
@@ -22,6 +23,7 @@
     "fastify": "^5.2.0",
     "jose": "^5.9.6",
     "pg": "^8.13.1",
+    "sharp": "^0.34.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {

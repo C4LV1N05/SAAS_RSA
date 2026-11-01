@@ -88,7 +88,7 @@ export function registerGuestRoutes(app: FastifyInstance, deps: Deps) {
   app.get(`${GUEST_PREFIX}/menu`, async (request) =>
     guestTx(deps, request, async (tx, ctx) => {
       const location = ctx.locationIds[0]!;
-      const categories = await tx.select().from(menuCategories).where(eq(menuCategories.locationId, location)).orderBy(asc(menuCategories.sortOrder));
+      const categories = await tx.select().from(menuCategories).where(eq(menuCategories.locationId, location)).orderBy(asc(menuCategories.sortOrder), asc(menuCategories.name));
       const items = await tx
         .select({
           id: menuItems.id,
@@ -98,10 +98,12 @@ export function registerGuestRoutes(app: FastifyInstance, deps: Deps) {
           priceCents: menuItems.priceCents,
           station: menuItems.station,
           available: menuItems.available,
+          imageUrl: menuItems.imageUrl,
+          imageThumbUrl: menuItems.imageThumbUrl,
         })
         .from(menuItems)
         .where(eq(menuItems.locationId, location))
-        .orderBy(asc(menuItems.sortOrder));
+        .orderBy(asc(menuItems.sortOrder), asc(menuItems.name));
       const soldOut = new Set(
         (await tx.execute<{ id: string } & Record<string, unknown>>(sql`select app.sold_out_items(${location}::uuid) as id`)).rows.map((r) => r.id),
       );

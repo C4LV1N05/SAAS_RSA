@@ -13,6 +13,7 @@ import { INTERNAL_AUTH_ROUTE, registerInternalAuthRoutes } from './routes/intern
 import { GUEST_PREFIX, registerGuestRoutes } from './routes/guest';
 import { registerServeRoutes } from './routes/serve';
 import type { ServiceEventBus } from './events';
+import { ACCEPTED_TYPES, LocalMediaStore, MAX_UPLOAD_BYTES, type MediaStore } from './media';
 
 export interface AppOptions extends Deps {
   verify: Verifier;
@@ -21,6 +22,8 @@ export interface AppOptions extends Deps {
   /** Live station updates; omitted in tests that do not need streaming. */
   events?: ServiceEventBus;
   guestAppUrl?: string;
+  /** Where menu photos are stored; photo upload is off without it. */
+  media?: MediaStore;
   /** Browser origins allowed to call the API (the guest/staff web app). */
   corsOrigins?: string[];
   logLevel?: string;
@@ -44,7 +47,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   ]);
   void app.register(cors, {
     origin: (origin, cb) => cb(null, !origin || origins.has(origin)),
-    methods: ['GET', 'POST', 'PUT', 'PATCH'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['authorization', 'content-type', 'idempotency-key', 'x-guest-session'],
     maxAge: 600,
   });
@@ -53,7 +56,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     if (request.method === 'OPTIONS') return; // CORS preflight carries no credentials
     const route = request.routeOptions.url ?? '';
     // Guest routes authenticate with the table session token instead (routes/guest.ts).
-    if (PUBLIC_ROUTES.has(route) || route.startsWith(`${GUEST_PREFIX}/`)) return;
+    if (PUBLIC_ROUTES.has(route) || route.startsWith(`${GUEST_PREFIX}/`) || route.startsWith('/media/')) return;
     const header = request.headers.authorization;
     if (!header?.startsWith('Bearer ')) throw new HttpError(401, 'unauthenticated', 'Bearer token required');
     request.auth = await options.verify(header.slice('Bearer '.length));
@@ -69,6 +72,20 @@ export function buildApp(options: AppOptions): FastifyInstance {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
+  // Photo uploads arrive as the raw image body (Content-Type: image/jpeg, image/png, ...).
+  app.addContentTypeParser(ACCEPTED_TYPES, { parseAs: 'buffer', bodyLimit: MAX_UPLOAD_BYTES }, (_req, body, done) => done(null, body));
+
+  // Development: serve locally stored photos. Production uses Azure Blob Storage URLs directly.
+  const media = options.media;
+  if (media instanceof LocalMediaStore) {
+    app.get('/media/*', async (request, reply) => {
+      const key = (request.params as { '*': string })['*'];
+      const file = await media.get(key);
+      if (!file) throw new HttpError(404, 'not_found', 'Not found');
+      return reply.type('image/webp').header('cache-control', 'public, max-age=31536000, immutable').send(file);
+    });
+  }
+
   const deps: Deps = { db: options.db };
   registerInternalAuthRoutes(app, options.db, options.authActionSecret);
   registerShiftRoutes(app, deps);
@@ -80,6 +97,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   registerGuestRoutes(app, deps);
   registerServeRoutes(app, deps, {
     ...(options.events ? { events: options.events } : {}),
+    ...(options.media ? { media: options.media } : {}),
     guestAppUrl: options.guestAppUrl ?? 'https://order.saas-rsa.app',
   });
 

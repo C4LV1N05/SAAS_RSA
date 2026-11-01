@@ -285,6 +285,8 @@ export const menuItems = pgTable('menu_items', {
   available: boolean('available').notNull().default(true),
   tillCode: text('till_code'),
   sortOrder: integer('sort_order').notNull().default(0),
+  imageUrl: text('image_url'),
+  imageThumbUrl: text('image_thumb_url'),
 });
 
 export const inventoryItems = pgTable('inventory_items', {

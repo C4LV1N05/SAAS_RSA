@@ -13,6 +13,7 @@ import { TipLanding } from './guest/TipLanding';
 const StaffShell = lazy(() => import('./staff/StaffShell').then((m) => ({ default: m.StaffShell })));
 const Floor = lazy(() => import('./staff/Floor').then((m) => ({ default: m.Floor })));
 const Station = lazy(() => import('./staff/Station').then((m) => ({ default: m.Station })));
+const MenuPhotos = lazy(() => import('./staff/MenuPhotos').then((m) => ({ default: m.MenuPhotos })));
 
 function Home() {
   return (
@@ -38,6 +39,7 @@ createRoot(document.getElementById('root')!).render(
           <Route index element={<Navigate to="floor" replace />} />
           <Route path="floor" element={<Floor />} />
           <Route path="station/:station" element={<Station />} />
+          <Route path="menu" element={<MenuPhotos />} />
         </Route>
         <Route path="*" element={<Home />} />
       </Routes>

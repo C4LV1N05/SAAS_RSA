@@ -11,6 +11,8 @@ export interface MenuItem {
   priceCents: number;
   station: 'kitchen' | 'bar';
   soldOut: boolean;
+  imageUrl: string | null;
+  imageThumbUrl: string | null;
 }
 
 export interface BillLine {

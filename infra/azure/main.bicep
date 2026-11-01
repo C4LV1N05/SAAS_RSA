@@ -150,6 +150,43 @@ var ownerUrl = 'postgres://${postgresAdminLogin}:${uriComponent(postgresAdminPas
 var appUrl = 'postgres://saas_app:${uriComponent(appDbPassword)}@${pgHost}:5432/${dbName}?sslmode=require'
 var workerUrl = 'postgres://saas_worker:${uriComponent(workerDbPassword)}@${pgHost}:5432/${dbName}?sslmode=require'
 
+// Menu photos: public, read-only blobs in South Africa North. The API re-encodes
+// every upload (location data stripped) before it lands here.
+var mediaContainerName = 'menu-images'
+resource media 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: take(toLower(replace('${namePrefix}media${suffix}', '-', '')), 24)
+  location: location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+  properties: {
+    accessTier: 'Hot'
+    allowBlobPublicAccess: true
+    allowSharedKeyAccess: true
+    minimumTlsVersion: 'TLS1_2'
+    supportsHttpsTrafficOnly: true
+  }
+}
+
+resource mediaBlobs 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+  parent: media
+  name: 'default'
+  properties: {
+    cors: {
+      corsRules: [
+        { allowedOrigins: ['*'], allowedMethods: ['GET', 'HEAD'], allowedHeaders: ['*'], exposedHeaders: [], maxAgeInSeconds: 86400 }
+      ]
+    }
+  }
+}
+
+resource mediaContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: mediaBlobs
+  name: mediaContainerName
+  properties: { publicAccess: 'Blob' }
+}
+
+var mediaConnectionString = 'DefaultEndpointsProtocol=https;AccountName=${media.name};AccountKey=${media.listKeys().keys[0].value};EndpointSuffix=${az.environment().suffixes.storage}'
+
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: '${namePrefix}-env'
   location: location
@@ -182,6 +219,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
       secrets: concat(registrySecrets, [
         { name: 'database-url', value: appUrl }
         { name: 'auth-action-secret', value: authActionSecret }
+        { name: 'media-connection-string', value: mediaConnectionString }
       ])
       registries: registries
     }
@@ -202,6 +240,9 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AUTH_ACTION_SECRET', secretRef: 'auth-action-secret' }
             { name: 'GUEST_APP_URL', value: effectiveGuestAppUrl }
             { name: 'CORS_ORIGINS', value: webOrigin }
+            { name: 'MEDIA_STORE', value: 'azure' }
+            { name: 'MEDIA_CONTAINER', value: mediaContainer.name }
+            { name: 'AZURE_STORAGE_CONNECTION_STRING', secretRef: 'media-connection-string' }
           ]
           probes: [
             { type: 'Liveness', httpGet: { path: '/health', port: 3000 }, periodSeconds: 30 }
@@ -298,3 +339,4 @@ output apiUrl string = 'https://${api.properties.configuration.ingress.fqdn}'
 output webUrl string = effectiveGuestAppUrl
 output postgresHost string = pgHost
 output migrateJobName string = migrate.name
+output mediaBaseUrl string = '${media.properties.primaryEndpoints.blob}${mediaContainerName}'

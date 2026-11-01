@@ -31,11 +31,13 @@ Prices on the menu include VAT. The bill shows the VAT included, at 15% (a dated
 | `/tip/<tip code>` | Guests | A waiter's tip QR code; the tip goes to that waiter when the guest pays |
 | `/staff/floor` | Waiters | Tables needing action first: confirm new tables, bring the card machine (amount and tip), record the till slip number, close tables paid at the till |
 | `/staff/station/kitchen` and `/staff/station/bar` | Kitchen, bar | A live docket rail: one ticket per order, oldest first, turning saffron after 10 minutes and red after 20; Start, Ready, Collected |
+| `/staff/menu` | Owners, managers | Every dish with its photo: add or change a photo (straight from the phone camera), remove it, and take a dish off the menu |
 
 Design notes:
 
 - **Phones on prepaid data:** guests download about 60 KB of script, with fonts bundled (no Google Fonts call). The staff screens and sign-in code load only on `/staff`.
 - **Connection drops:** orders are retried with the same key, so nothing is sent twice. The bill refreshes every 15 seconds.
+- **Dish photos:** each dish shows a square photo beside its name; tapping it opens a larger view with the description and an Add button. Thumbnails are 320 px WebP (about 15–30 KB) and load only as the guest scrolls; the larger 640 px image loads only when opened. A dish without a photo still works normally.
 - **Kitchen and bar screens:** they reconnect to the live stream on their own and also poll every 30 seconds as a fallback.
 
 Staff sign in with Auth0 (configure `VITE_AUTH0_*`). Without Auth0, in local development, they paste a development token, for example one from `pnpm demo`.
@@ -47,7 +49,7 @@ The guest app (a web page the QR code opens) calls these without logging in. Aft
 | Call | Purpose |
 | --- | --- |
 | `POST /v1/guest/sessions` `{ tagToken }` | Start or join the table's tab; returns `sessionToken` (valid 6 hours or until the tab closes) |
-| `GET /v1/guest/menu` | Categories and items, with `soldOut` flags |
+| `GET /v1/guest/menu` | Categories and items, with `soldOut` flags and `imageUrl` / `imageThumbUrl` (null when there is no photo) |
 | `POST /v1/guest/orders` + `Idempotency-Key` | Order items (safe to retry on a bad connection) |
 | `GET /v1/guest/tab` | The bill: lines (with `mine`), total, VAT, outstanding, your subtotal |
 | `GET /v1/guest/tip-codes/:token` | Name of the waiter whose tip code was scanned |
@@ -55,6 +57,20 @@ The guest app (a web page the QR code opens) calls these without logging in. Aft
 | `GET /v1/guest/payments` | Status of the table's payment requests |
 
 Guests run in their own database role, limited to their own tab. They cannot read staff, stock, tips or any other table, even if an API bug tried to.
+
+## Menu photos
+
+Managers add photos on `/staff/menu`. The phone shrinks large photos before sending them, so uploads work on mobile data.
+
+| Call | Purpose |
+| --- | --- |
+| `GET /v1/menu?locationId=` | The full menu for staff, including dishes taken off the menu |
+| `POST /v1/menu/items/:id/image` | Upload a photo as the raw request body (`image/jpeg`, `png`, `webp`, `heic`; up to 8 MB, at least 200 px) |
+| `DELETE /v1/menu/items/:id/image` | Remove the photo |
+
+The API never stores the original. It decodes the upload, turns it upright, crops it to a square around the most interesting part, and saves two WebP copies (640 px and 320 px). Re-encoding removes camera metadata, including GPS location (POPIA). Files are named after a hash of their content, so a changed photo gets a new address and browsers can cache each one for a year.
+
+Storage is set with `MEDIA_STORE`: `local` saves to `MEDIA_DIR` and the API serves it at `/media/*` (development); `azure` uploads to a public Blob container in South Africa North (production, created by `infra/azure/main.bicep`).
 
 ## Till webhook contract
 

@@ -44,6 +44,7 @@ export function StaffShell() {
         <NavLink to="/staff/floor">Floor</NavLink>
         <NavLink to="/staff/station/kitchen">Kitchen</NavLink>
         <NavLink to="/staff/station/bar">Bar</NavLink>
+        {(claims.role === 'owner' || claims.role === 'general_manager') && <NavLink to="/staff/menu">Menu</NavLink>}
         <span className="spacer" />
         {onStation && <span className="live" data-on={live}>{live ? 'Live' : 'Reconnecting'}</span>}
         {claims.locationIds.length > 1 && (

@@ -3,6 +3,7 @@ import { buildApp } from './app';
 import { createVerifier } from './auth';
 import { loadEnv } from './env';
 import { listenForServiceEvents, ServiceEventBus } from './events';
+import { createMediaStore } from './media';
 
 const env = loadEnv();
 const { db, pool } = createDb(env.DATABASE_URL);
@@ -12,6 +13,7 @@ const app = buildApp({
   verify: createVerifier(env),
   ...(env.AUTH_ACTION_SECRET ? { authActionSecret: env.AUTH_ACTION_SECRET } : {}),
   events,
+  media: createMediaStore(env),
   guestAppUrl: env.GUEST_APP_URL,
   corsOrigins: env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
   logLevel: env.LOG_LEVEL,

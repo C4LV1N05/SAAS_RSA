@@ -12,6 +12,7 @@ import { requirePermission, tenantTx, type Deps } from '../context';
 import { audit } from '../data';
 import { HttpError, notFound } from '../errors';
 import type { ServiceEventBus } from '../events';
+import { menuImageKeys, processMenuImage, type MediaStore } from '../media';
 import { can } from '../permissions';
 import { emitOrderToTill, emitTillEvent, getTab, loadBill, lockTab, placeOrder, randomToken } from '../serve-data';
 
@@ -75,7 +76,11 @@ function idempotencyKey(headers: Record<string, unknown>): string {
   return key;
 }
 
-export function registerServeRoutes(app: FastifyInstance, deps: Deps, opts: { events?: ServiceEventBus; guestAppUrl: string }) {
+export function registerServeRoutes(
+  app: FastifyInstance,
+  deps: Deps,
+  opts: { events?: ServiceEventBus; media?: MediaStore; guestAppUrl: string },
+) {
   // ---------------------------------------------------------------- set-up
   app.post('/v1/menu/categories', { preHandler: requirePermission('service:manage') }, async (request, reply) => {
     const body = CreateCategory.parse(request.body);
@@ -95,12 +100,57 @@ export function registerServeRoutes(app: FastifyInstance, deps: Deps, opts: { ev
     return reply.status(201).send({ item, components });
   });
 
+  /** The full menu for staff (including unavailable items). */
+  app.get('/v1/menu', { preHandler: requirePermission('service:operate') }, async (request) => {
+    const { locationId } = LocationQuery.parse(request.query);
+    return tenantTx(deps, request, async (tx) => ({
+      categories: await tx.select().from(menuCategories).where(eq(menuCategories.locationId, locationId)).orderBy(asc(menuCategories.sortOrder), asc(menuCategories.name)),
+      items: await tx.select().from(menuItems).where(eq(menuItems.locationId, locationId)).orderBy(asc(menuItems.sortOrder), asc(menuItems.name)),
+    }));
+  });
+
   app.patch('/v1/menu/items/:id', { preHandler: requirePermission('service:manage') }, async (request) => {
     const { id } = z.object({ id: uuid }).parse(request.params);
     const body = z.object({ available: z.boolean().optional(), priceCents: z.number().int().min(0).optional() }).parse(request.body);
     const [row] = await tenantTx(deps, request, (tx) => tx.update(menuItems).set(body).where(eq(menuItems.id, id)).returning());
     if (!row) throw notFound('Menu item');
     return { item: row };
+  });
+
+  /**
+   * Upload a dish photo: send the image itself as the body (Content-Type
+   * image/jpeg, image/png, image/webp or image/heic, up to 8 MB).
+   */
+  app.post('/v1/menu/items/:id/image', { preHandler: requirePermission('service:manage') }, async (request, reply) => {
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    if (!opts.media) throw new HttpError(503, 'unavailable', 'Photo storage is not configured');
+    if (!Buffer.isBuffer(request.body) || request.body.length === 0) {
+      throw new HttpError(415, 'unsupported_media_type', 'Send the photo as the request body with an image Content-Type');
+    }
+    const auth = request.auth!;
+    // Check the item exists (and is in this tenant) before doing the work.
+    const [existing] = await tenantTx(deps, request, (tx) => tx.select({ id: menuItems.id }).from(menuItems).where(eq(menuItems.id, id)));
+    if (!existing) throw notFound('Menu item');
+
+    const image = await processMenuImage(request.body);
+    const keys = menuImageKeys(auth.orgId, id, image.hash);
+    const [imageUrl, imageThumbUrl] = await Promise.all([
+      opts.media.put(keys.full, image.full, 'image/webp'),
+      opts.media.put(keys.thumb, image.thumb, 'image/webp'),
+    ]);
+    const [item] = await tenantTx(deps, request, (tx) =>
+      tx.update(menuItems).set({ imageUrl, imageThumbUrl }).where(eq(menuItems.id, id)).returning(),
+    );
+    return reply.status(201).send({ item, imageUrl, imageThumbUrl });
+  });
+
+  app.delete('/v1/menu/items/:id/image', { preHandler: requirePermission('service:manage') }, async (request) => {
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const [item] = await tenantTx(deps, request, (tx) =>
+      tx.update(menuItems).set({ imageUrl: null, imageThumbUrl: null }).where(eq(menuItems.id, id)).returning(),
+    );
+    if (!item) throw notFound('Menu item');
+    return { item };
   });
 
   app.post('/v1/tables', { preHandler: requirePermission('service:manage') }, async (request, reply) => {

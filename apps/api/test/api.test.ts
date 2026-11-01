@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDb, type Role } from '@saas-rsa/db';
 import { buildApp } from '../src/app';
 import { createVerifier, signDevToken } from '../src/auth';
+import { loadEnv } from '../src/env';
 import type { FastifyInstance } from 'fastify';
 
 const OWNER_URL = process.env.DATABASE_OWNER_URL;
@@ -79,10 +80,7 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
 
     const { db, pool } = createDb(APP_URL!);
     closeDb = () => pool.end();
-    const verify = createVerifier({
-      NODE_ENV: 'test', PORT: 0, LOG_LEVEL: 'silent', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api',
-      AUTH_CLAIM_NAMESPACE: 'https://saas-rsa.app/', GUEST_APP_URL: 'https://order.example', CORS_ORIGINS: '', AUTH_DEV_SECRET: SECRET,
-    });
+    const verify = createVerifier(loadEnv({ NODE_ENV: 'test', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api', AUTH_DEV_SECRET: SECRET }));
     app = buildApp({ db, verify, authActionSecret: ACTION_SECRET, logLevel: 'silent' });
 
     const sign = (userId: string, role: Role, orgId = ids.org, locationIds = [ids.loc]) =>
@@ -105,7 +103,8 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
     try {
       await c.query('begin');
       await c.query(`select set_config('app.org_id', $1, true), set_config('app.role', 'owner', true)`, [ids.org]);
-      const r = await c.query('select template, recipient, params, status from notification_outbox');
+      // notification_outbox is not FORCE-RLS (the worker functions read across tenants), so filter explicitly.
+      const r = await c.query('select template, recipient, params, status from notification_outbox where org_id = $1', [ids.org]);
       await c.query('commit');
       return r.rows;
     } finally {

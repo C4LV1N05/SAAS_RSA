@@ -34,7 +34,7 @@ az deployment group create -g saas-rsa-prod \
 az containerapp job start -g saas-rsa-prod -n saasrsa-migrate
 ```
 
-The output `apiUrl` is the API's public address, and `webUrl` is the guest ordering app and staff screens (Azure Static Web Apps). Table QR codes point at `webUrl`. To use your own domain (e.g. `order.yourrestaurant.co.za`), add it to the Static Web App in the portal, then redeploy with `guestAppUrl=https://order.yourrestaurant.co.za`. Keep `ACTION` for step 3.
+The output `apiUrl` is the API's public address, and `webUrl` is the guest ordering app and staff screens (Azure Static Web Apps). Table QR codes point at `webUrl`. Menu photos go to the `menu-images` Blob container in a storage account the template creates in South Africa North (`mediaBaseUrl`); the API gets its connection string as a Container Apps secret. To use your own domain (e.g. `order.yourrestaurant.co.za`), add it to the Static Web App in the portal, then redeploy with `guestAppUrl=https://order.yourrestaurant.co.za`. Keep `ACTION` for step 3.
 
 **Container images.** The repository is public, but GitHub can still create the container packages as private. Either make the `saas_rsa-api` and `saas_rsa-worker` packages public (GitHub profile → Packages → package settings → Change visibility), or pass `ghcrUsername` and a `ghcrToken` with `read:packages` to the deployment.
 
