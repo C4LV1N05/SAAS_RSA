@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const docs = ['README.md', 'docs/ARCHITECTURE.md', 'docs/SERVE.md', 'docs/DEPLOY_AZURE.md'];
 const roots = ['apps/', 'packages/', 'db/', 'infra/', 'docs/', 'scripts/', '.github/'];
+// Build outputs are named in the docs but only exist after a build.
+const generated = /(^|\/)(dist|node_modules|\.media)(\/|$)/;
 const diagramTypes = ['flowchart', 'sequenceDiagram', 'erDiagram', 'classDiagram', 'stateDiagram-v2', 'graph'];
 
 const problems = [];
@@ -18,7 +20,7 @@ for (const doc of docs) {
   const text = readFileSync(join(root, doc), 'utf8');
 
   for (const [, token] of text.matchAll(/`([^`\s]+)`/g)) {
-    if (!roots.some((r) => token.startsWith(r))) continue;
+    if (!roots.some((r) => token.startsWith(r)) || generated.test(token)) continue;
     const path = token.replace(/[),.:;]+$/, '').replace(/\*.*$/, '');
     if (!existsSync(join(root, path))) problems.push(`${doc}: \`${token}\` does not exist`);
   }
