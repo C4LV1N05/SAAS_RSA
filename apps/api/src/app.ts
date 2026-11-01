@@ -14,6 +14,7 @@ import { GUEST_PREFIX, registerGuestRoutes } from './routes/guest';
 import { registerServeRoutes } from './routes/serve';
 import { registerWorkforceRoutes } from './routes/workforce';
 import { registerEmployeeRoutes } from './routes/employees';
+import { registerLeaveRoutes } from './routes/leave';
 import type { FieldCipher } from './crypto';
 import type { ServiceEventBus } from './events';
 import { ACCEPTED_TYPES, LocalMediaStore, MAX_UPLOAD_BYTES, type MediaStore } from './media';
@@ -54,6 +55,8 @@ export function buildApp(options: AppOptions): FastifyInstance {
     origin: (origin, cb) => cb(null, !origin || origins.has(origin)),
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['authorization', 'content-type', 'idempotency-key', 'x-guest-session'],
+    // Lets the web app read download file names (payslips, bank files).
+    exposedHeaders: ['content-disposition'],
     maxAge: 600,
   });
 
@@ -96,11 +99,12 @@ export function buildApp(options: AppOptions): FastifyInstance {
   registerShiftRoutes(app, deps);
   registerTimeRoutes(app, deps);
   registerComplianceRoutes(app, deps);
-  registerPayrollRoutes(app, deps);
+  registerPayrollRoutes(app, deps, options.cipher);
   registerTipRoutes(app, deps);
   registerLogbookRoutes(app, deps);
   registerWorkforceRoutes(app, deps);
   registerEmployeeRoutes(app, deps, options.cipher);
+  registerLeaveRoutes(app, deps);
   registerGuestRoutes(app, deps);
   registerServeRoutes(app, deps, {
     ...(options.events ? { events: options.events } : {}),

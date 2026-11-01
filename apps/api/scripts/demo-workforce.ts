@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
 import { computeLogHash, GENESIS_HASH, type LogHashInput } from '@saas-rsa/domain';
+import { employeeAad, type FieldCipher } from '../src/crypto';
 
 const DAY = 86_400_000;
 const sastToday = () => new Date(Date.now() + 2 * 3_600_000).toISOString().slice(0, 10);
@@ -32,7 +33,7 @@ const PATTERNS: Record<'waiter' | 'chef' | 'waiter2' | 'bar', Record<number, [st
   bar: { 3: ['16:00', '23:30', 30], 4: ['16:00', '23:30', 30], 5: ['16:00', '23:30', 30] },
 };
 
-export async function seedWorkforce(c: pg.PoolClient, ids: Ids): Promise<{ bartender: string }> {
+export async function seedWorkforce(c: pg.PoolClient, ids: Ids, cipher: FieldCipher): Promise<{ bartender: string }> {
   const { org, loc } = ids;
   const role = async (name: string, group: string, points = 1) =>
     (await c.query('insert into job_roles (org_id, name, tip_group, tip_points) values ($1, $2, $3, $4) returning id', [org, name, group, points])).rows[0].id as string;
@@ -48,6 +49,24 @@ export async function seedWorkforce(c: pg.PoolClient, ids: Ids): Promise<{ barte
     `insert into employees (org_id, home_location_id, job_role_id, first_name, last_name, employment_start) values ($1, $2, $3, 'Lindiwe', 'Ndlovu', '2026-06-01') returning id`,
     [org, loc, barRole],
   )).rows[0].id as string;
+
+  // Encrypted tax and bank details (Lindiwe has none yet, so the bank file shows what is missing).
+  const personal: Array<[string, string, string, string, string, string]> = [
+    // employee, ID number, tax number, bank, branch, account
+    [ids.employees.waiter, '0108190123084', '0123456782', 'Capitec', '470010', '1402558877'],
+    [ids.employees.chef, '9402075123082', '1234567897', 'FNB', '250655', '62844109931'],
+    [ids.employees.waiter2, '0311300456085', '', 'TymeBank', '678910', '51009923411'],
+  ];
+  for (const [emp, idNo, tax, bank, branch, account] of personal) {
+    const enc = (v: string, f: 'id_number' | 'tax_number' | 'bank_account') => (v ? cipher.encrypt(v, employeeAad(org, emp, f)) : null);
+    await c.query(
+      `update employees set id_number_enc = $2, id_number_hint = $3, tax_number_enc = $4, tax_number_hint = $5, bank_account_enc = $6, bank_account_hint = $7,
+         bank_name = $8, bank_branch_code = $9, bank_account_type = 'savings', bank_account_holder = (select first_name || ' ' || last_name from employees where id = $1), personal_updated_at = now()
+       where id = $1`,
+      [emp, enc(idNo, 'id_number'), idNo.slice(-4), enc(tax, 'tax_number'), tax ? tax.slice(-4) : null, enc(account, 'bank_account'), account.slice(-4), bank, branch],
+    );
+  }
+  await c.query(`update organisations set paye_reference = '7123456789', uif_reference = 'U123456789' where id = $1`, [org]);
 
   for (const [emp, cents] of [[ids.employees.waiter, 3_250], [ids.employees.chef, 4_800], [ids.employees.waiter2, 3_100], [bartender, 3_500]] as const) {
     await c.query(`insert into pay_rates (org_id, employee_id, rate_type, rate_cents, effective_from) values ($1, $2, 'hourly', $3, '2026-03-01')`, [org, emp, cents]);
@@ -163,6 +182,31 @@ export async function seedWorkforce(c: pg.PoolClient, ids: Ids): Promise<{ barte
   await c.query(
     `insert into shift_tips (org_id, location_id, business_date, source, amount_cents, declared_by) values ($1, $2, $3, 'cash', 64000, $4), ($1, $2, $3, 'card', 118050, $4)`,
     [org, loc, yesterday, ids.users.manager],
+  );
+
+  // Leave: opening balances from the old system, one approved day last week (paid in the
+  // next run) and two requests waiting for a manager.
+  for (const emp of [ids.employees.waiter, ids.employees.chef, ids.employees.waiter2]) {
+    await c.query(
+      `insert into leave_transactions (org_id, employee_id, leave_type, minutes, reason, occurred_on, source, created_by) values ($1, $2, 'annual', 2700, 'Opening balance from the old system', '2026-03-01', 'adjustment', $3)`,
+      [org, emp, ids.users.owner],
+    );
+  }
+  const approvedDay = addDays(lastWeek, 2);
+  const leaveId = (await c.query(
+    `insert into leave_requests (org_id, employee_id, leave_type, starts_on, ends_on, minutes, reason, status, requested_by, decided_by, decided_at)
+     values ($1, $2, 'family_responsibility', $3, $3, 540, 'Child sick at home', 'approved', $4, $5, now() - interval '6 days') returning id`,
+    [org, ids.employees.chef, approvedDay, ids.users.chef, ids.users.manager],
+  )).rows[0].id as string;
+  await c.query(
+    `insert into leave_transactions (org_id, employee_id, leave_type, minutes, reason, occurred_on, source, leave_request_id, created_by) values ($1, $2, 'family_responsibility', -540, 'Family responsibility leave', $3, 'taken', $4, $5)`,
+    [org, ids.employees.chef, approvedDay, leaveId, ids.users.manager],
+  );
+  await c.query(
+    `insert into leave_requests (org_id, employee_id, leave_type, starts_on, ends_on, minutes, reason, requested_by) values
+       ($1, $2, 'annual', $3, $4, 1080, 'Going home to Limpopo for a funeral', null),
+       ($1, $5, 'annual', $6, $6, 480, 'Graduation', $7)`,
+    [org, ids.employees.waiter2, addDays(nextWeek, 1), addDays(nextWeek, 2), ids.employees.waiter, addDays(nextWeek, 4), ids.users.waiter],
   );
 
   // Log book: a valid hash chain, including one corrected entry.

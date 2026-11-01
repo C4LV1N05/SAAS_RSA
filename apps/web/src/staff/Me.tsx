@@ -3,6 +3,7 @@ import { api, ApiError, newKey } from '../lib/api';
 import { effectiveState, readQueue, toRequest, writeQueue, type ClockAction } from '../lib/clockQueue';
 import { dayLabel, hm, minutesBetween, sastDate, timeOf } from '../lib/dates';
 import { useStaff } from './StaffShell';
+import { MyLeave, MyPayslips } from './MyLeave';
 
 interface MeShift {
   id: string;
@@ -244,6 +245,9 @@ export function Me() {
           </ul>
         )}
       </section>
+
+      <MyLeave />
+      <MyPayslips />
 
       {data && data.recentEntries.length > 0 && (
         <section aria-labelledby="recent-h" className="block">

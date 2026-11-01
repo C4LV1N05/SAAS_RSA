@@ -34,6 +34,7 @@ const NAV: Array<{ name: string; links: Array<{ to: string; label: string; scree
     links: [
       { to: '/staff/schedule', label: 'Schedule', screen: 'schedule' },
       { to: '/staff/timesheets', label: 'Timesheets', screen: 'timesheets' },
+      { to: '/staff/leave', label: 'Leave', screen: 'leave' },
       { to: '/staff/tips', label: 'Tips', screen: 'tips' },
       { to: '/staff/logbook', label: 'Log book', screen: 'logbook' },
       { to: '/staff/payroll', label: 'Payroll', screen: 'payroll' },

@@ -55,6 +55,7 @@ export function Schedule() {
   const [done, setDone] = useState<string | null>(null);
   const [editing, setEditing] = useState<Draft | null>(null);
   const [review, setReview] = useState<Finding[] | null>(null);
+  const [away, setAway] = useState<Array<{ employeeId: string; startsOn: string; endsOn: string; leaveType: string }>>([]);
 
   const days = weekDays(monday);
   const name = nameLookup(team);
@@ -70,6 +71,13 @@ export function Schedule() {
       setTeam(t);
       setShifts(s.shifts.filter((x) => x.status !== 'cancelled'));
       setError(null);
+      // Approved leave shows on the roster; a missing permission or signal just hides it.
+      api<{ requests: Array<{ employeeId: string; startsOn: string; endsOn: string; leaveType: string }> }>(
+        `/v1/leave/requests?locationId=${locationId}&status=approved&from=${monday}&to=${addDays(monday, 6)}`,
+        { token },
+      )
+        .then((r) => setAway(r.requests))
+        .catch(() => setAway([]));
     } catch (err) {
       setError((err as Error).message);
     }
@@ -185,6 +193,9 @@ export function Schedule() {
                     </th>
                     {days.map((d) => (
                       <td key={d}>
+                        {r.id && away.some((a) => a.employeeId === r.id && a.startsOn <= d && a.endsOn >= d) && (
+                          <span className="leave-pill">On leave</span>
+                        )}
                         {onDay(mine, d).map((s) => (
                           <button
                             key={s.id}

@@ -28,6 +28,16 @@ export function requirePermission(permission: Permission) {
   };
 }
 
+/** preHandler: allow when the role has any one of the permissions. */
+export function requireAnyPermission(...permissions: Permission[]) {
+  return async (request: FastifyRequest, _reply: FastifyReply) => {
+    const auth = authOf(request);
+    if (!permissions.some((p) => can(auth.role, p))) {
+      throw new HttpError(403, 'forbidden', `Your role (${auth.role}) cannot do this`);
+    }
+  };
+}
+
 /** Run the handler's queries in one transaction scoped to the caller's tenant. */
 export function tenantTx<T>(deps: Deps, request: FastifyRequest, fn: (tx: Tx, auth: TenantContext) => Promise<T>): Promise<T> {
   const auth = authOf(request);

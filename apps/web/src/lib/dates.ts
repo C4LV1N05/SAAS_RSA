@@ -64,3 +64,11 @@ export function hm(minutes: number): string {
 export function minutesBetween(a: string | Date, b: string | Date): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60_000);
 }
+
+/** 1080 minutes of 540-minute days -> "2 days"; 270 -> "half a day" */
+export function daysText(minutes: number, dayMinutes: number): string {
+  const d = Math.round((minutes / Math.max(1, dayMinutes)) * 2) / 2;
+  if (d === 0.5) return 'half a day';
+  if (d === 1) return '1 day';
+  return `${d % 1 === 0 ? d : d.toFixed(1)} days`;
+}

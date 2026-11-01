@@ -96,8 +96,9 @@ describe.skipIf(!OWNER_URL || !APP_URL)('row-level security (as saas_app)', () =
       ]);
       await c.query(`insert into payroll_runs (id, org_id, pay_period_id) values ($1, $2, $3)`, [run, A.org, period]);
       await c.query(
-        `insert into payslips (id, org_id, payroll_run_id, employee_id, gross_cents, deductions_cents, net_cents, employer_cost_cents)
-         values ($1, $2, $3, $4, 100000, 1000, 99000, 101000)`,
+        // released_at: finalising releases payslips to employees (0010).
+        `insert into payslips (id, org_id, payroll_run_id, employee_id, gross_cents, deductions_cents, net_cents, employer_cost_cents, released_at)
+         values ($1, $2, $3, $4, 100000, 1000, 99000, 101000, now())`,
         [slip, A.org, run, emp.a1],
       );
       await c.query(`update payroll_runs set status = 'finalised', finalised_at = now() where id = $1`, [run]);

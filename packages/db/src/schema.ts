@@ -197,6 +197,94 @@ export const complianceFindings = pgTable('compliance_findings', {
   overrideReason: text('override_reason'),
 });
 
+export const payPeriods = pgTable('pay_periods', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  frequency: text('frequency').notNull(),
+  startsOn: date('starts_on').notNull(),
+  endsOn: date('ends_on').notNull(),
+  payDate: date('pay_date').notNull(),
+});
+
+export const payrollRuns = pgTable('payroll_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  payPeriodId: uuid('pay_period_id').notNull(),
+  status: text('status').notNull().default('draft'),
+  ruleSnapshot: jsonb('rule_snapshot').notNull().default({}),
+  createdBy: uuid('created_by'),
+  approvedBy: uuid('approved_by'),
+  approvedAt: ts('approved_at'),
+  finalisedAt: ts('finalised_at'),
+  paidAt: ts('paid_at'),
+  paidBy: uuid('paid_by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const payslips = pgTable('payslips', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  payrollRunId: uuid('payroll_run_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  grossCents: cents('gross_cents').notNull(),
+  deductionsCents: cents('deductions_cents').notNull(),
+  netCents: cents('net_cents').notNull(),
+  employerCostCents: cents('employer_cost_cents').notNull(),
+  etiCents: cents('eti_cents').notNull().default(0),
+  snapshot: jsonb('snapshot').notNull().default({}),
+  releasedAt: ts('released_at'),
+});
+
+export const payslipLines = pgTable('payslip_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  payslipId: uuid('payslip_id').notNull(),
+  lineNo: smallint('line_no').notNull().default(0),
+  code: text('code').notNull(),
+  kind: text('kind').notNull(),
+  description: text('description').notNull(),
+  quantityMinutes: integer('quantity_minutes'),
+  rateCents: cents('rate_cents'),
+  multiplier: numeric('multiplier', { precision: 4, scale: 2 }),
+  amountCents: cents('amount_cents').notNull(),
+  sarsCode: text('sars_code'),
+  needsReview: boolean('needs_review').notNull().default(false),
+  ruleVersionKeys: text('rule_version_keys').array().notNull().default([]),
+});
+
+export const leaveRequests = pgTable('leave_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  leaveType: text('leave_type').notNull(),
+  startsOn: date('starts_on').notNull(),
+  endsOn: date('ends_on').notNull(),
+  minutes: integer('minutes').notNull(),
+  reason: text('reason'),
+  status: text('status').notNull().default('requested'),
+  requestedBy: uuid('requested_by'),
+  decidedBy: uuid('decided_by'),
+  decidedAt: ts('decided_at'),
+  decisionNote: text('decision_note'),
+  medicalCertificateRequired: boolean('medical_certificate_required').notNull().default(false),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const leaveTransactions = pgTable('leave_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  leaveType: text('leave_type').notNull(),
+  minutes: integer('minutes').notNull(),
+  reason: text('reason').notNull(),
+  occurredOn: date('occurred_on').notNull(),
+  payrollRunId: uuid('payroll_run_id'),
+  source: text('source').notNull().default('adjustment'),
+  leaveRequestId: uuid('leave_request_id'),
+  createdBy: uuid('created_by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
 export const tipPools = pgTable('tip_pools', {
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: uuid('org_id').notNull(),

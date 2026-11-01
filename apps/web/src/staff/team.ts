@@ -10,6 +10,9 @@ export interface TeamMember {
   tipGroup: string | null;
   hasLogin: boolean;
   hasDateOfBirth: boolean;
+  hasIdNumber?: boolean;
+  hasTaxNumber?: boolean;
+  hasBankDetails?: boolean;
   daysPerWeek: number;
   overtimeAgreement: boolean;
   rate: { type: 'hourly' | 'monthly'; cents: number } | null;

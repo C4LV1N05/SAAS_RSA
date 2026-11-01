@@ -20,6 +20,7 @@ const Schedule = lazy(() => import('./staff/Schedule').then((m) => ({ default: m
 const Timesheets = lazy(() => import('./staff/Timesheets').then((m) => ({ default: m.Timesheets })));
 const Tips = lazy(() => import('./staff/Tips').then((m) => ({ default: m.Tips })));
 const Logbook = lazy(() => import('./staff/Logbook').then((m) => ({ default: m.Logbook })));
+const Leave = lazy(() => import('./staff/Leave').then((m) => ({ default: m.Leave })));
 const Payroll = lazy(() => import('./staff/Payroll').then((m) => ({ default: m.Payroll })));
 
 function Home() {
@@ -47,6 +48,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="me" element={<Me />} />
           <Route path="schedule" element={<Schedule />} />
           <Route path="timesheets" element={<Timesheets />} />
+          <Route path="leave" element={<Leave />} />
           <Route path="tips" element={<Tips />} />
           <Route path="logbook" element={<Logbook />} />
           <Route path="payroll" element={<Payroll />} />

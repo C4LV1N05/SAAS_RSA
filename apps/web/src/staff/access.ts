@@ -3,7 +3,7 @@
  * (apps/api/src/permissions.ts) so people only see screens that will work for
  * them; the API and the database still enforce the rules.
  */
-export type Screen = 'floor' | 'kitchen' | 'bar' | 'menu' | 'schedule' | 'timesheets' | 'tips' | 'logbook' | 'payroll' | 'me';
+export type Screen = 'floor' | 'kitchen' | 'bar' | 'menu' | 'schedule' | 'timesheets' | 'leave' | 'tips' | 'logbook' | 'payroll' | 'me';
 
 const MANAGERS = ['owner', 'general_manager', 'shift_manager'];
 
@@ -14,6 +14,7 @@ const ACCESS: Record<Screen, readonly string[]> = {
   menu: ['owner', 'general_manager'],
   schedule: MANAGERS,
   timesheets: [...MANAGERS, 'payroll_admin'],
+  leave: [...MANAGERS, 'payroll_admin'],
   tips: [...MANAGERS, 'payroll_admin'],
   logbook: MANAGERS,
   payroll: ['owner', 'payroll_admin'],

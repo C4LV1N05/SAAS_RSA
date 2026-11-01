@@ -15,3 +15,4 @@ export * from './serve/bill';
 export * from './serve/stock';
 export * from './serve/tips';
 export * from './identity';
+export * from './leave/entitlements';

@@ -15,6 +15,7 @@ import { loadEnv } from '../src/env';
 import { createMediaStore, menuImageKeys, processMenuImage } from '../src/media';
 import { DEMO_IMAGES } from './demo-images';
 import { seedWorkforce } from './demo-workforce';
+import { createFieldCipher } from '../src/crypto';
 
 const ownerUrl = process.env.DATABASE_OWNER_URL;
 const secret = process.env.AUTH_DEV_SECRET;
@@ -102,7 +103,7 @@ try {
     );
     tables.push({ label, tag });
   }
-  await seedWorkforce(c, { org, loc, users, employees });
+  await seedWorkforce(c, { org, loc, users, employees }, createFieldCipher(env));
 
   const tipCode = token();
   await c.query('insert into tip_codes (org_id, employee_id, token) values ($1, $2, $3)', [org, employees.waiter2, tipCode]);

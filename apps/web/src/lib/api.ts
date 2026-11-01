@@ -56,4 +56,33 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   return json as T;
 }
 
+/**
+ * Fetch a file the API protects (payslip PDF, bank file) and hand it to the
+ * browser: opened in a new tab, or saved under the server's file name.
+ */
+export async function openFile(path: string, token: string, mode: 'open' | 'download' = 'open'): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { headers: { authorization: `Bearer ${token}` } });
+  } catch {
+    throw new ApiError(0, 'offline', 'No connection. Check your signal and try again.');
+  }
+  if (!res.ok) {
+    const json = (await res.json().catch(() => undefined)) as { error?: { code?: string; message?: string; details?: unknown } } | undefined;
+    throw new ApiError(res.status, json?.error?.code ?? 'error', json?.error?.message ?? `Request failed (${res.status})`, json?.error?.details);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'download';
+  const a = document.createElement('a');
+  a.href = url;
+  if (mode === 'download') a.download = name;
+  else a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
