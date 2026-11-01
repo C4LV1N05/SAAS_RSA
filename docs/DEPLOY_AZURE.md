@@ -23,11 +23,14 @@ az group create -n saas-rsa-prod -l southafricanorth
 # Strong passwords: keep them in a password manager.
 PG_ADMIN=$(openssl rand -base64 24); APP_DB=$(openssl rand -base64 24)
 WORKER_DB=$(openssl rand -base64 24); ACTION=$(openssl rand -hex 32)
+# Encrypts ID, tax and bank numbers. Losing it makes them unreadable: store it safely.
+FIELD_KEYS="$(date +%Y)a:$(openssl rand -base64 32)"
 
 az deployment group create -g saas-rsa-prod \
   -f infra/azure/main.bicep -p infra/azure/main.parameters.json \
   -p postgresAdminPassword="$PG_ADMIN" appDbPassword="$APP_DB" \
      workerDbPassword="$WORKER_DB" authActionSecret="$ACTION" \
+     fieldEncryptionKeys="$FIELD_KEYS" \
      auth0Domain=<your-tenant>.eu.auth0.com
 
 # First migration (CI does this on every later release):
@@ -35,6 +38,8 @@ az containerapp job start -g saas-rsa-prod -n saasrsa-migrate
 ```
 
 The output `apiUrl` is the API's public address, and `webUrl` is the guest ordering app and staff screens (Azure Static Web Apps). Table QR codes point at `webUrl`. Menu photos go to the `menu-images` Blob container in a storage account the template creates in South Africa North (`mediaBaseUrl`); the API gets its connection string as a Container Apps secret. To use your own domain (e.g. `order.yourrestaurant.co.za`), add it to the Static Web App in the portal, then redeploy with `guestAppUrl=https://order.yourrestaurant.co.za`. Keep `ACTION` for step 3.
+
+**Encryption keys.** `fieldEncryptionKeys` encrypts employees' ID, tax and bank numbers in the database (AES-256-GCM). Keep a copy in a password manager: without it those numbers cannot be read. To rotate, put a new key first and keep the old one after it (`2027a:<new>,2026a:<old>`); new writes use the first key and older values still decrypt. The API refuses to start in production without this setting, so redeploy the template with it before releasing a version that includes it.
 
 **Container images.** The repository is public, but GitHub can still create the container packages as private. Either make the `saas_rsa-api` and `saas_rsa-worker` packages public (GitHub profile → Packages → package settings → Change visibility), or pass `ghcrUsername` and a `ghcrToken` with `read:packages` to the deployment.
 

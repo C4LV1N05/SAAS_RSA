@@ -10,6 +10,7 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../src/app';
 import { createVerifier, signDevToken } from '../src/auth';
 import { loadEnv } from '../src/env';
+import { createFieldCipher } from '../src/crypto';
 
 const OWNER_URL = process.env.DATABASE_OWNER_URL;
 const APP_URL = process.env.DATABASE_URL;
@@ -30,7 +31,7 @@ describe.skipIf(!OWNER_URL || !APP_URL)('workforce screens API', () => {
   let app: FastifyInstance;
   let ownerPool: pg.Pool;
   let closeDb: () => Promise<void>;
-  const tokens = {} as Record<'manager' | 'staff' | 'staff2', string>;
+  const tokens = {} as Record<'manager' | 'staff' | 'staff2' | 'owner', string>;
 
   const call = (token: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, body?: unknown, headers: Record<string, string> = {}) =>
     app.inject({ method, url, headers: { authorization: `Bearer ${token}`, ...headers }, ...(body ? { payload: body as object } : {}) });
@@ -72,11 +73,12 @@ describe.skipIf(!OWNER_URL || !APP_URL)('workforce screens API', () => {
     const { db, pool } = createDb(APP_URL!);
     closeDb = () => pool.end();
     const verify = createVerifier(loadEnv({ NODE_ENV: 'test', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api', AUTH_DEV_SECRET: SECRET }));
-    app = buildApp({ db, verify, authActionSecret: 'x'.repeat(40), logLevel: 'silent' });
+    app = buildApp({ db, verify, authActionSecret: 'x'.repeat(40), logLevel: 'silent', cipher: createFieldCipher({ AUTH_DEV_SECRET: SECRET }) });
     const sign = (userId: string, role: Role) => signDevToken({ userId, role, orgId: ids.org, locationIds: [ids.loc] }, SECRET);
     tokens.manager = await sign(ids.manager, 'general_manager');
     tokens.staff = await sign(ids.staffUser, 'employee');
     tokens.staff2 = await sign(ids.staffUser2, 'employee');
+    tokens.owner = await sign(ids.owner, 'owner');
   });
 
   afterAll(async () => {
@@ -194,5 +196,56 @@ describe.skipIf(!OWNER_URL || !APP_URL)('workforce screens API', () => {
     await call(tokens.manager, 'POST', `/v1/logbook/entries/${entry.id}/ack`);
     [entry] = (await call(tokens.manager, 'GET', `/v1/logbook?locationId=${ids.loc}`)).json().entries;
     expect(entry).toMatchObject({ ackCount: 1, acknowledgedByMe: true });
+  });
+
+  it('encrypts ID, tax and bank numbers; shows them masked; logs every reveal', async () => {
+    const url = `/v1/employees/${ids.employee2}/personal`;
+    expect((await call(tokens.manager, 'PUT', url, { taxNumber: '0123456782' })).statusCode).toBe(403);
+    expect((await call(tokens.owner, 'PUT', url, { idNumber: '8001015009088' })).json().error.code).toBe('invalid_id_number');
+
+    const saved = await call(tokens.owner, 'PUT', url, {
+      idNumber: '0108190123084',
+      taxNumber: '0123456782',
+      bank: { holder: 'Z Khumalo', bankName: 'Capitec', branchCode: '470010', accountNumber: '1234 567 890', accountType: 'savings' },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().personal).toMatchObject({
+      idNumber: '••••••3084', taxNumber: '••••••6782', dateOfBirth: '2001-08-19', revealed: false,
+      bank: { holder: 'Z Khumalo', bankName: 'Capitec', branchCode: '470010', accountType: 'savings', accountNumber: '••••••7890' },
+    });
+
+    // The database holds ciphertext only.
+    const c = await ownerPool.connect();
+    try {
+      await c.query('begin');
+      await c.query(`select set_config('app.org_id', $1, true), set_config('app.role', 'owner', true)`, [ids.org]);
+      const row = (await c.query('select id_number_enc, bank_account_enc, tax_number_hint from employees where id = $1', [ids.employee2])).rows[0];
+      await c.query('commit');
+      expect(row.id_number_enc.toString('latin1')).not.toContain('0108190123084');
+      expect(row.bank_account_enc.toString('latin1')).not.toContain('1234567890');
+      expect(row.tax_number_hint).toBe('6782');
+      const audit = (await c.query(`select action, after from audit_log where org_id = $1 and entity_id = $2 order by at`, [ids.org, ids.employee2])).rows;
+      expect(JSON.stringify(audit)).not.toContain('0108190123084');
+    } finally {
+      c.release();
+    }
+
+    const revealed = await call(tokens.owner, 'GET', `${url}?reveal=true`);
+    expect(revealed.json().personal).toMatchObject({ idNumber: '0108190123084', taxNumber: '0123456782', bank: { accountNumber: '1234567890' }, revealed: true });
+    expect((await call(tokens.manager, 'GET', url)).statusCode).toBe(403);
+
+    const team = (await call(tokens.owner, 'GET', `/v1/team?locationId=${ids.loc}`)).json().employees;
+    expect(team.find((e: { firstName: string }) => e.firstName === 'Zanele')).toMatchObject({ hasIdNumber: true, hasTaxNumber: true, hasBankDetails: true, hasDateOfBirth: true });
+
+    const c2 = await ownerPool.connect();
+    try {
+      await c2.query('begin');
+      await c2.query(`select set_config('app.org_id', $1, true), set_config('app.role', 'owner', true)`, [ids.org]);
+      const reveals = (await c2.query(`select count(*)::int as n from audit_log where org_id = $1 and action = 'employee.personal_revealed'`, [ids.org])).rows[0].n;
+      await c2.query('commit');
+      expect(reveals).toBe(1);
+    } finally {
+      c2.release();
+    }
   });
 });

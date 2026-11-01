@@ -14,3 +14,4 @@ export * from './notifications';
 export * from './serve/bill';
 export * from './serve/stock';
 export * from './serve/tips';
+export * from './identity';

@@ -3,6 +3,7 @@
  * the source of truth (they also hold RLS policies and triggers); keep these in step.
  */
 import {
+  customType,
   bigint,
   boolean,
   date,
@@ -19,6 +20,7 @@ import {
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
 const cents = (name: string) => bigint(name, { mode: 'number' });
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
 export const organisations = pgTable('organisations', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -108,6 +110,18 @@ export const employees = pgTable('employees', {
   bceaThresholdExempt: boolean('bcea_threshold_exempt').notNull().default(false),
   employmentStart: date('employment_start').notNull(),
   employmentEnd: date('employment_end'),
+  // Encrypted by the API (apps/api/src/crypto.ts); hints are the last digits only.
+  idNumberEnc: bytea('id_number_enc'),
+  taxNumberEnc: bytea('tax_number_enc'),
+  bankAccountEnc: bytea('bank_account_enc'),
+  idNumberHint: text('id_number_hint'),
+  taxNumberHint: text('tax_number_hint'),
+  bankAccountHint: text('bank_account_hint'),
+  bankName: text('bank_name'),
+  bankBranchCode: text('bank_branch_code'),
+  bankAccountType: text('bank_account_type'),
+  bankAccountHolder: text('bank_account_holder'),
+  personalUpdatedAt: ts('personal_updated_at'),
 });
 
 export const payRates = pgTable('pay_rates', {

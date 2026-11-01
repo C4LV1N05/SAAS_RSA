@@ -13,6 +13,8 @@ import { INTERNAL_AUTH_ROUTE, registerInternalAuthRoutes } from './routes/intern
 import { GUEST_PREFIX, registerGuestRoutes } from './routes/guest';
 import { registerServeRoutes } from './routes/serve';
 import { registerWorkforceRoutes } from './routes/workforce';
+import { registerEmployeeRoutes } from './routes/employees';
+import type { FieldCipher } from './crypto';
 import type { ServiceEventBus } from './events';
 import { ACCEPTED_TYPES, LocalMediaStore, MAX_UPLOAD_BYTES, type MediaStore } from './media';
 
@@ -25,6 +27,8 @@ export interface AppOptions extends Deps {
   guestAppUrl?: string;
   /** Where menu photos are stored; photo upload is off without it. */
   media?: MediaStore;
+  /** Encrypts ID, tax and bank numbers; the personal-details routes are off without it. */
+  cipher?: FieldCipher;
   /** Browser origins allowed to call the API (the guest/staff web app). */
   corsOrigins?: string[];
   logLevel?: string;
@@ -96,6 +100,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   registerTipRoutes(app, deps);
   registerLogbookRoutes(app, deps);
   registerWorkforceRoutes(app, deps);
+  registerEmployeeRoutes(app, deps, options.cipher);
   registerGuestRoutes(app, deps);
   registerServeRoutes(app, deps, {
     ...(options.events ? { events: options.events } : {}),

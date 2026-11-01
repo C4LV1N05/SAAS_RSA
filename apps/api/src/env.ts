@@ -28,11 +28,16 @@ const EnvSchema = z
     MEDIA_PUBLIC_BASE_URL: z.string().url().default('http://localhost:3000/media'),
     AZURE_STORAGE_CONNECTION_STRING: optional(z.string()),
     MEDIA_CONTAINER: z.string().default('menu-images'),
+    // Field encryption for ID, tax and bank numbers: "keyid:base64(32 bytes)", comma-separated, newest first
+    FIELD_ENCRYPTION_KEYS: optional(z.string()),
     // Local development only: HS256 shared secret used when AUTH_JWKS_URL is empty
     AUTH_DEV_SECRET: optional(z.string().min(32)),
   })
   .refine((e) => e.AUTH_JWKS_URL || e.AUTH_DEV_SECRET, {
     message: 'Set AUTH_JWKS_URL (production) or AUTH_DEV_SECRET (local development)',
+  })
+  .refine((e) => e.NODE_ENV !== 'production' || e.FIELD_ENCRYPTION_KEYS, {
+    message: 'FIELD_ENCRYPTION_KEYS is required in production (ID, tax and bank numbers are encrypted with it)',
   })
   .refine((e) => e.NODE_ENV !== 'production' || (e.AUTH_JWKS_URL && e.AUTH_ISSUER), {
     message: 'AUTH_JWKS_URL and AUTH_ISSUER are required in production; the dev secret is for local use only',

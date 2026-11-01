@@ -53,6 +53,10 @@ param auth0Audience string = 'https://api.saas-rsa.app'
 @description('Shared secret between the Auth0 Post-Login Action and the API (32+ characters).')
 param authActionSecret string
 
+@secure()
+@description('Keys that encrypt ID, tax and bank numbers: "keyid:base64(32 random bytes)", newest first. Keep old keys listed after a rotation.')
+param fieldEncryptionKeys string
+
 @description('Guest ordering app URL (your custom domain). Empty = the Static Web App address.')
 param guestAppUrl string = ''
 
@@ -220,6 +224,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'database-url', value: appUrl }
         { name: 'auth-action-secret', value: authActionSecret }
         { name: 'media-connection-string', value: mediaConnectionString }
+        { name: 'field-encryption-keys', value: fieldEncryptionKeys }
       ])
       registries: registries
     }
@@ -243,6 +248,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'MEDIA_STORE', value: 'azure' }
             { name: 'MEDIA_CONTAINER', value: mediaContainer.name }
             { name: 'AZURE_STORAGE_CONNECTION_STRING', secretRef: 'media-connection-string' }
+            { name: 'FIELD_ENCRYPTION_KEYS', secretRef: 'field-encryption-keys' }
           ]
           probes: [
             { type: 'Liveness', httpGet: { path: '/health', port: 3000 }, periodSeconds: 30 }
