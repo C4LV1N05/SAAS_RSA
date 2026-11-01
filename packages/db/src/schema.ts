@@ -203,6 +203,7 @@ export const shiftTips = pgTable('shift_tips', {
   amountCents: cents('amount_cents').notNull(),
   employeeId: uuid('employee_id'),
   declaredBy: uuid('declared_by'),
+  declaredAt: ts('declared_at').notNull().defaultNow(),
   posReference: text('pos_reference'),
 });
 

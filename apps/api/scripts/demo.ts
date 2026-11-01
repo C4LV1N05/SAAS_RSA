@@ -14,6 +14,7 @@ import { signDevToken } from '../src/auth';
 import { loadEnv } from '../src/env';
 import { createMediaStore, menuImageKeys, processMenuImage } from '../src/media';
 import { DEMO_IMAGES } from './demo-images';
+import { seedWorkforce } from './demo-workforce';
 
 const ownerUrl = process.env.DATABASE_OWNER_URL;
 const secret = process.env.AUTH_DEV_SECRET;
@@ -101,6 +102,8 @@ try {
     );
     tables.push({ label, tag });
   }
+  await seedWorkforce(c, { org, loc, users, employees });
+
   const tipCode = token();
   await c.query('insert into tip_codes (org_id, employee_id, token) values ($1, $2, $3)', [org, employees.waiter2, tipCode]);
   await c.query('commit');
@@ -112,8 +115,9 @@ try {
   for (const t of tables) console.log(`  ${t.label.padEnd(6)} ${guestApp}/t/${t.tag}`);
   console.log(`\nKagiso's tip code: ${guestApp}/tip/${tipCode}`);
   console.log(`\nStaff screens: ${guestApp}/staff  (paste a token; valid 15 minutes)`);
-  console.log(`  Manager: ${await sign(users.manager, 'general_manager')}`);
-  console.log(`  Waiter:  ${await sign(users.waiter, 'employee')}`);
+  console.log(`  Owner (everything, incl. payroll): ${await sign(users.owner, 'owner')}`);
+  console.log(`  Manager (Pieter):                  ${await sign(users.manager, 'general_manager')}`);
+  console.log(`  Waiter (Ayanda, can clock in):     ${await sign(users.waiter, 'employee')}`);
   console.log(JSON.stringify({ org, loc, tables, tipCode, users, employees }));
 } catch (err) {
   await c.query('rollback');

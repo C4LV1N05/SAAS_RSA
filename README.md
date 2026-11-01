@@ -6,12 +6,12 @@ A South African platform for restaurants and hospitality, modelled on 7shifts an
 
 | Pillar | Module | Status |
 | --- | --- | --- |
-| Schedule | Scheduling (drafts, publish, rotation patterns) | API + schema |
-| Schedule | Time Clocking (offline-safe, idempotent, geofenced) | API + schema |
-| Schedule | Labour Compliance (BCEA rule engine) | Engine + API |
-| Pay | Payroll (PAYE, UIF, SDL, ETI, coded payslip lines, EMP201 values) | Engine + preview API |
-| Pay | Tip Management (pools, FOH/BOH split, kept out of the NMW test) | Engine + API |
-| Retain | Manager Log Book (append-only, hash-chained, revisions) | API + schema |
+| Schedule | Scheduling: week roster, drafts, BCEA check before publishing, labour cost | API + manager screen |
+| Schedule | Time Clocking: phone clock-in with breaks, works without signal; timesheet approval | API + staff and manager screens |
+| Schedule | Labour Compliance (BCEA rule engine) | Engine + API, shown when publishing |
+| Pay | Payroll (PAYE, UIF, SDL, ETI, coded payslip lines, EMP201 values) | Engine + preview screen |
+| Pay | Tip Management (pools, FOH/BOH split, kept out of the NMW test) | Engine + manager screen |
+| Retain | Manager Log Book (append-only, hash-chained, revisions, read receipts) | API + manager screen |
 | Serve | Table ordering by QR/NFC, kitchen and bar routing with live screens | API + schema |
 | Serve | Stock deducted per order, sold-out items, deliveries and stock-takes | API + schema |
 | Serve | Split bills (own items, the rest, equal shares), paid on the till's card machine | API + schema |
@@ -24,7 +24,7 @@ A South African platform for restaurants and hospitality, modelled on 7shifts an
 ```
 apps/
   api/        Fastify REST API (Zod validation, JWT auth, tenant-scoped transactions)
-  web/        Guest ordering app (/t/<table code>) and staff screens (/staff): React + Vite
+  web/        Guest ordering app (/t/<table code>) and staff screens (/staff): service, team and "My shifts". React + Vite
   worker/     Background worker: Twilio messages (WhatsApp -> SMS) and till webhooks, from database outboxes
 packages/
   domain/     Pure TypeScript: BCEA segmentation + checks, SA payroll, tips, hash chain, rule registry
@@ -64,7 +64,11 @@ pnpm dev:web                             # http://localhost:5173
 DATABASE_OWNER_URL=... AUTH_DEV_SECRET=... GUEST_APP_URL=http://localhost:5173 pnpm demo
 ```
 
-Open a table link in a phone-sized window to order, and `http://localhost:5173/staff` in another window (paste the waiter token) to confirm the table, watch the kitchen and bar screens, and record payments. Paste the manager token to open **Menu**, where you can add or change dish photos. The demo dishes come with illustrated photos, saved in `.media/` and served by the API.
+Open a table link in a phone-sized window to order. Open `http://localhost:5173/staff` in another window and paste a token:
+
+- **Waiter (Ayanda):** "My shifts" offers Clock in for a shift starting now. Confirm tables on Floor, and watch the Kitchen and Bar screens.
+- **Manager (Pieter):** Schedule shows this week; next week is drafted, and publishing it flags Sipho's overtime under the BCEA. Timesheets has the last two days to approve. Tips has yesterday's tips to share. The Log book has a corrected entry and a record check. Menu has the dish photos.
+- **Owner:** everything above, plus Payroll, which previews last week's payslips and EMP201 figures.
 
 ## Tests
 

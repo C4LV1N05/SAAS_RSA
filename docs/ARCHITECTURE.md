@@ -113,7 +113,7 @@ flowchart TB
 
 | Container | Technology | Responsibility |
 | --- | --- | --- |
-| Web app | React 18.3, React Router 6, Vite 6; Auth0 SPA SDK; fonts bundled with `@fontsource` | Guest ordering at `/t/<tag>` and `/tip/<code>`. Staff screens under `/staff`: floor, kitchen, bar, menu. Staff code is split out, so guests download about 60 KB of script. |
+| Web app | React 18.3, React Router 6, Vite 6; Auth0 SPA SDK; fonts bundled with `@fontsource` | Guest ordering at `/t/<tag>` and `/tip/<code>`. Staff screens under `/staff` (see [Screens](#screens)). Each screen is its own chunk, so guests download about 60 KB of script. |
 | API | Node 22, Fastify 5, Zod, Drizzle on node-postgres, jose, sharp, Azure Blob SDK | REST API. Authenticates, applies RBAC, opens a tenant-scoped transaction, runs domain logic, writes outbox rows in the same transaction. Streams live service events over SSE. |
 | Worker | Node 22, node-postgres, Twilio REST | Claims rows from the two outboxes and delivers them: notifications to Twilio and till events to the till's webhook URL, with retries and backoff. |
 | PostgreSQL | Azure Flexible Server 16 | System of record. Enforces tenancy (RLS), immutability (triggers), stock rules (`app.move_stock`) and queueing (`SKIP LOCKED` leases). |
@@ -141,7 +141,7 @@ flowchart LR
 | `db/migrations` | The SQL source of truth: tables, RLS policies, SECURITY DEFINER functions, triggers. Forward-only and numbered. |
 | `apps/api` | Fastify app (`src/app.ts`), auth (`src/auth.ts`), permissions (`src/permissions.ts`), routes per module (`src/routes/`), media pipeline (`src/media.ts`), live events (`src/events.ts`). |
 | `apps/worker` | Outbox loop (`src/outbox.ts`), Twilio providers (`src/providers.ts`, `src/deliver.ts`), till webhooks (`src/till.ts`). |
-| `apps/web` | Guest pages (`src/guest/`), staff pages (`src/staff/`), shared API, auth and SSE clients (`src/lib/`). |
+| `apps/web` | Guest pages (`src/guest/`), staff pages (`src/staff/`, with role access in `src/staff/access.ts`), shared API, auth, SSE, SAST date and offline clock-queue helpers (`src/lib/`). |
 | `infra/azure` | `main.bicep`: every Azure resource. |
 | `infra/auth0` | `post-login-action.js`: adds tenant claims to access tokens. |
 
@@ -151,8 +151,8 @@ flowchart LR
 
 | Module | What it does | Data | API | Domain |
 | --- | --- | --- | --- | --- |
-| Scheduling | Draft shifts, then publish. Publishing runs the BCEA checks on the proposed week and refuses on blocking findings unless a manager overrides with a reason. Published shifts trigger WhatsApp/SMS notices. | `job_roles`, `employees`, `shifts`, `rotation_patterns` | `POST/GET /v1/shifts`, `POST /v1/shifts/publish` | `bcea/` |
-| Time clocking | Clock in and out, with breaks, from a phone or kiosk. Every action carries an `Idempotency-Key`, so retries after a dropped connection never create duplicates. Device time is accepted for offline captures within limits. Mobile clock-ins outside the location's geofence are flagged, not refused. Managers approve or correct entries. | `time_entries`, `time_entry_breaks` | `POST /v1/time/clock-in`, `/clock-out`, `/:id/breaks`, `/:id/approve`, `PATCH /v1/time/:id` | `time.ts` |
+| Scheduling | Draft shifts, then publish. Publishing runs the BCEA checks on the proposed week and refuses on blocking findings unless a manager overrides with a reason; a dry run shows the findings first. Drafts can be edited or deleted; published shifts are cancelled, never deleted. Published shifts trigger WhatsApp/SMS notices. | `job_roles`, `employees`, `shifts`, `rotation_patterns` | `POST/GET /v1/shifts`, `PATCH/DELETE /v1/shifts/:id`, `POST /v1/shifts/publish` (`dryRun`), `GET /v1/team` | `bcea/` |
+| Time clocking | Clock in and out, with breaks, from a phone or kiosk. Every action carries an `Idempotency-Key`, so retries after a dropped connection never create duplicates. With no signal, the phone keeps the action with its real time and sends it later (accepted up to 72 hours). Mobile clock-ins outside the location's geofence are flagged, not refused. Managers see late starts, overruns, offline and edited entries, then approve or correct them with a reason. | `time_entries`, `time_entry_breaks` | `POST /v1/time/clock-in`, `/clock-out`, `/:id/breaks`, `/:id/approve`, `PATCH /v1/time/:id`, `GET /v1/time`, `GET /v1/me`, `POST /v1/me/break` | `time.ts`, `apps/web/src/lib/clockQueue.ts` |
 | Labour compliance | Splits worked minutes into ordinary, overtime, Sunday, public holiday and night segments, then checks them against BCEA limits: 9 h/8 h daily and 45 h weekly ordinary time, overtime caps and agreement, 12 h daily and 36 h weekly rest, meal intervals, and the national minimum wage. | `compliance_findings`, `public_holidays`, `rule_versions` | `POST /v1/compliance/employee-week` | `bcea/segment.ts`, `bcea/checks.ts` |
 
 ### Pay
@@ -160,13 +160,13 @@ flowchart LR
 | Module | What it does | Data | API | Domain |
 | --- | --- | --- | --- | --- |
 | Payroll | Calculates payslips from approved hours and dated pay rates: earnings by segment, PAYE (annualised), UIF (ceiling pro-rated to the pay period), SDL, ETI, and medical credits. Each line carries its IRP5 source code. Produces EMP201 totals. Finalised runs are locked by trigger. | `pay_rates`, `pay_periods`, `payroll_runs`, `payslips`, `payslip_lines`, `leave_transactions` | `POST /v1/payroll/preview` | `payroll/payslip.ts`, `payroll/statutory.ts` |
-| Tip management | Declares shift tips and distributes them by hours with a front-of-house/back-of-house split, to the cent. Tips are excluded from the minimum wage test and flagged for tax review. Serve card tips go to the tip-code waiter, else the assigned waiter, else the pool. | `tip_pools`, `shift_tips`, `tip_distributions`, `tip_codes` | `POST /v1/tips/declare`, `/distribute` | `tips/distribute.ts`, `serve/tips.ts` |
+| Tip management | Declares shift tips and distributes them by hours with a front-of-house/back-of-house split, to the cent. Tips are excluded from the minimum wage test and flagged for tax review. Serve card tips go to the tip-code waiter, else the assigned waiter, else the pool. | `tip_pools`, `shift_tips`, `tip_distributions`, `tip_codes` | `GET/POST /v1/tips/pools`, `GET /v1/tips`, `POST /v1/tips/declare`, `/distribute` | `tips/distribute.ts`, `serve/tips.ts` |
 
 ### Retain
 
 | Module | What it does | Data | API | Domain |
 | --- | --- | --- | --- | --- |
-| Manager log book | Shift notes by category. Entries are never updated: a correction is a new revision. Each location's entries form a SHA-256 hash chain that anyone can verify. Staff acknowledge entries they have read. | `manager_logs`, `log_acknowledgements`, `performance_tracking` | `POST/GET /v1/logbook`, `/:group/revisions`, `/entries/:id/ack`, `GET /v1/logbook/verify` | `logbook/hashchain.ts` |
+| Manager log book | Shift notes by category. Entries are never updated: a correction is a new revision. Each location's entries form a SHA-256 hash chain that anyone can verify. Staff acknowledge entries they have read; the list shows who wrote each entry, its corrections, and read receipts. | `manager_logs`, `log_acknowledgements`, `performance_tracking` | `POST/GET /v1/logbook`, `/:group/revisions`, `/entries/:id/ack`, `GET /v1/logbook/verify` | `logbook/hashchain.ts` |
 
 ### Serve
 
@@ -180,6 +180,22 @@ Full detail is in `docs/SERVE.md`.
 | Stock | Each order deducts its components in the same transaction. Dishes show as sold out when stock runs short. Deliveries, stock-takes and waste are recorded. | `inventory_items`, `inventory_movements` | inventory routes |
 | Bills and payment | Split by own items, the remainder, or equal shares. Payment is taken on the till's card machine and recorded with the till slip number. | `payments`, `payment_allocations` | `POST/GET /v1/guest/payments`, floor routes |
 | Till sync | Every tab, order, void and payment is written to an outbox and delivered to the till as a signed webhook. | `till_integrations`, `till_events` | `PUT /v1/till-integration` |
+
+### Screens
+
+All staff screens live under `/staff` in the web app. The menu shows each person only the screens their role can use (`apps/web/src/staff/access.ts` mirrors the API permissions); the API and RLS still enforce them.
+
+| Screen | Path | Roles | What it does |
+| --- | --- | --- | --- |
+| My shifts | `/staff/me` | Everyone with an employee record | Clock in and out (with location), breaks, upcoming shifts, last 7 days. Works without signal. |
+| Floor | `/staff/floor` | Managers, staff | Confirm new tables, payment requests, close tables paid at the till. |
+| Kitchen, Bar | `/staff/station/:station` | Managers, staff | Live docket rail per station. |
+| Menu | `/staff/menu` | Owner, general manager | Dish photos and availability. |
+| Schedule | `/staff/schedule` | Owner, general and shift managers | Week roster with hours and wage cost, draft and edit shifts, check against the BCEA and publish (general managers and owners). |
+| Timesheets | `/staff/timesheets` | Managers, payroll admin | Week of clock entries with flags; correct with a reason; approve. |
+| Tips | `/staff/tips` | Managers, payroll admin | Record a day's tips, choose the sharing rule, preview and record each share. |
+| Log book | `/staff/logbook` | Managers | Write, correct, mark as read, and check the hash chain. |
+| Payroll | `/staff/payroll` | Owner, payroll admin | Preview payslips and EMP201 values for a period. |
 
 ## 6. Data architecture
 
@@ -445,9 +461,9 @@ flowchart LR
 | --- | --- | --- |
 | Domain | BCEA segmentation and checks, PAYE/UIF/SDL/ETI against SARS tables, tip splits to the cent, hash chain, bill splitting, stock | `packages/domain/test` |
 | Database | Tenant isolation as `saas_app`: cross-org reads return nothing, cross-org writes are refused, guest limits | `packages/db/test` |
-| API | End to end over HTTP against a real database: auth and claims, RBAC, publish gate, clocking idempotency, log book chain, Serve flow, photo upload and processing | `apps/api/test` |
+| API | End to end over HTTP against a real database: auth and claims, RBAC, publish gate and dry run, clocking idempotency and breaks, team and timesheet views, tip pools, log book chain and read receipts, Serve flow, photo upload and processing | `apps/api/test` |
 | Worker | Twilio adapters and fallback, outbox claiming as `saas_worker`, till signing | `apps/worker/test` |
-| Web | Bill choices, tip maths, SSE parsing | `apps/web/test` |
+| Web | Bill choices, tip maths, SSE parsing, SAST dates, schedule costing, timesheet flags, pay periods, offline clock queue, screen access | `apps/web/test` |
 | Docs | Every file path named in this document exists | `scripts/check-docs.mjs` |
 
 ## 13. Operations
@@ -505,7 +521,6 @@ Waiting on a decision from the business:
 
 Ready to build:
 
-- Manager screens for scheduling, timesheets, tips, log book and payroll preview, plus the employee clock-in screen.
 - Persisted payroll runs (draft, approved, finalised, paid), payslip PDFs and EFT bank files.
 - EMP501 and IRP5 export (e@syFile), and Xero/Sage journals.
 - Leave accrual and payouts (the ledger table exists), terminations and UI-19.

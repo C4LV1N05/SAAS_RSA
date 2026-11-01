@@ -12,6 +12,7 @@ import { registerLogbookRoutes } from './routes/logbook';
 import { INTERNAL_AUTH_ROUTE, registerInternalAuthRoutes } from './routes/internal-auth';
 import { GUEST_PREFIX, registerGuestRoutes } from './routes/guest';
 import { registerServeRoutes } from './routes/serve';
+import { registerWorkforceRoutes } from './routes/workforce';
 import type { ServiceEventBus } from './events';
 import { ACCEPTED_TYPES, LocalMediaStore, MAX_UPLOAD_BYTES, type MediaStore } from './media';
 
@@ -94,6 +95,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   registerPayrollRoutes(app, deps);
   registerTipRoutes(app, deps);
   registerLogbookRoutes(app, deps);
+  registerWorkforceRoutes(app, deps);
   registerGuestRoutes(app, deps);
   registerServeRoutes(app, deps, {
     ...(options.events ? { events: options.events } : {}),

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { canSee, homeScreen, type Screen } from './access';
 import { chooseLocation, chosenLocation, decodeClaims, getStaffToken, signIn, signOut, usesAuth0, type StaffClaims } from '../lib/staffAuth';
 
 interface StaffContext {
@@ -15,6 +16,35 @@ export function useStaff(): StaffContext {
   const c = useContext(Ctx);
   if (!c) throw new Error('useStaff outside StaffShell');
   return c;
+}
+
+const NAV: Array<{ name: string; links: Array<{ to: string; label: string; screen: Screen }> }> = [
+  { name: 'You', links: [{ to: '/staff/me', label: 'My shifts', screen: 'me' }] },
+  {
+    name: 'Service',
+    links: [
+      { to: '/staff/floor', label: 'Floor', screen: 'floor' },
+      { to: '/staff/station/kitchen', label: 'Kitchen', screen: 'kitchen' },
+      { to: '/staff/station/bar', label: 'Bar', screen: 'bar' },
+      { to: '/staff/menu', label: 'Menu', screen: 'menu' },
+    ],
+  },
+  {
+    name: 'Team',
+    links: [
+      { to: '/staff/schedule', label: 'Schedule', screen: 'schedule' },
+      { to: '/staff/timesheets', label: 'Timesheets', screen: 'timesheets' },
+      { to: '/staff/tips', label: 'Tips', screen: 'tips' },
+      { to: '/staff/logbook', label: 'Log book', screen: 'logbook' },
+      { to: '/staff/payroll', label: 'Payroll', screen: 'payroll' },
+    ],
+  },
+];
+
+/** /staff opens the first screen this role uses. */
+export function StaffHome() {
+  const { claims } = useStaff();
+  return <Navigate to={homeScreen(claims.role)} replace />;
 }
 
 export function StaffShell() {
@@ -35,16 +65,30 @@ export function StaffShell() {
     if (claims) setLocationId(chosenLocation(claims));
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // On a phone the links scroll sideways; keep the current screen's link in view.
+  useEffect(() => {
+    document.querySelector('.nav-scroll a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [route.pathname, token]);
+
   if (token === undefined) return <p className="staff-main quiet">Checking your sign-in…</p>;
   if (!token || !claims) return <SignIn onSignedIn={setToken} />;
 
   return (
     <div className={onStation ? 'station' : ''}>
       <nav className="staff-bar" aria-label="Staff screens">
-        <NavLink to="/staff/floor">Floor</NavLink>
-        <NavLink to="/staff/station/kitchen">Kitchen</NavLink>
-        <NavLink to="/staff/station/bar">Bar</NavLink>
-        {(claims.role === 'owner' || claims.role === 'general_manager') && <NavLink to="/staff/menu">Menu</NavLink>}
+        <div className="nav-scroll">
+          {NAV.map((group) => {
+            const links = group.links.filter((l) => canSee(claims.role, l.screen));
+            if (links.length === 0) return null;
+            return (
+              <div key={group.name} className="nav-group" role="group" aria-label={group.name}>
+                {links.map((l) => (
+                  <NavLink key={l.to} to={l.to}>{l.label}</NavLink>
+                ))}
+              </div>
+            );
+          })}
+        </div>
         <span className="spacer" />
         {onStation && <span className="live" data-on={live}>{live ? 'Live' : 'Reconnecting'}</span>}
         {claims.locationIds.length > 1 && (

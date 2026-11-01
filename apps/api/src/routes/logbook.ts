@@ -4,14 +4,14 @@
  * proves nothing was edited or removed after the fact.
  */
 import type { FastifyInstance } from 'fastify';
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { schema, type TenantContext, type Tx } from '@saas-rsa/db';
 import { computeLogHash, GENESIS_HASH, verifyChain, type ChainedEntry, type LogHashInput } from '@saas-rsa/domain';
 import { requirePermission, tenantTx, type Deps } from '../context';
 import { notFound } from '../errors';
 
-const { managerLogs, logAcknowledgements } = schema;
+const { managerLogs, logAcknowledgements, users } = schema;
 
 const Category = z.enum(['handover', 'maintenance', 'incident', 'disciplinary', 'note']);
 const Attachments = z.array(z.object({ url: z.string().url(), name: z.string().max(200) })).max(20).default([]);
@@ -128,18 +128,49 @@ export function registerLogbookRoutes(app: FastifyInstance, deps: Deps) {
     return reply.status(201).send({ entry });
   });
 
-  /** Latest revision of each entry at a location, newest first. */
+  /**
+   * Latest revision of each entry at a location, newest first, with the author's
+   * name, when the entry was first written, and who has acknowledged it.
+   */
   app.get('/v1/logbook', { preHandler: requirePermission('logbook:read') }, async (request) => {
     const q = LocationQuery.parse(request.query);
-    const rows = await tenantTx(deps, request, (tx) =>
-      tx
+    return tenantTx(deps, request, async (tx, auth) => {
+      const rows = await tx
         .selectDistinctOn([managerLogs.entryGroupId])
         .from(managerLogs)
         .where(eq(managerLogs.locationId, q.locationId))
-        .orderBy(managerLogs.entryGroupId, desc(managerLogs.revision)),
-    );
-    rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    return { entries: rows.slice(0, q.limit) };
+        .orderBy(managerLogs.entryGroupId, desc(managerLogs.revision));
+      rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const page = rows.slice(0, q.limit);
+      if (page.length === 0) return { entries: [] };
+
+      const firsts = await tx
+        .select({ entryGroupId: managerLogs.entryGroupId, createdAt: managerLogs.createdAt, authorUserId: managerLogs.authorUserId })
+        .from(managerLogs)
+        .where(and(inArray(managerLogs.entryGroupId, page.map((r) => r.entryGroupId)), eq(managerLogs.revision, 1)));
+      const authorIds = [...new Set([...page, ...firsts].map((r) => r.authorUserId))];
+      const names = await tx.select({ id: users.id, name: users.displayName }).from(users).where(inArray(users.id, authorIds));
+      const acks = await tx
+        .select({ managerLogId: logAcknowledgements.managerLogId, userId: logAcknowledgements.userId })
+        .from(logAcknowledgements)
+        .where(inArray(logAcknowledgements.managerLogId, page.map((r) => r.id)));
+      const nameOf = (id: string) => names.find((n) => n.id === id)?.name ?? null;
+
+      return {
+        entries: page.map((r) => {
+          const first = firsts.find((f) => f.entryGroupId === r.entryGroupId);
+          const mine = acks.filter((a) => a.managerLogId === r.id);
+          return {
+            ...r,
+            authorName: nameOf(r.authorUserId),
+            firstWrittenAt: first?.createdAt ?? r.createdAt,
+            firstAuthorName: first ? nameOf(first.authorUserId) : nameOf(r.authorUserId),
+            ackCount: mine.length,
+            acknowledgedByMe: mine.some((a) => a.userId === auth.userId),
+          };
+        }),
+      };
+    });
   });
 
   app.post('/v1/logbook/entries/:id/ack', { preHandler: requirePermission('logbook:read') }, async (request) => {

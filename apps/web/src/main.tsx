@@ -1,6 +1,6 @@
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 // Fonts are bundled (no Google Fonts call): faster on slow connections and no third-party tracking.
 import '@fontsource-variable/bricolage-grotesque/opsz.css';
 import '@fontsource/atkinson-hyperlegible/latin-400.css';
@@ -14,6 +14,13 @@ const StaffShell = lazy(() => import('./staff/StaffShell').then((m) => ({ defaul
 const Floor = lazy(() => import('./staff/Floor').then((m) => ({ default: m.Floor })));
 const Station = lazy(() => import('./staff/Station').then((m) => ({ default: m.Station })));
 const MenuPhotos = lazy(() => import('./staff/MenuPhotos').then((m) => ({ default: m.MenuPhotos })));
+const StaffHome = lazy(() => import('./staff/StaffShell').then((m) => ({ default: m.StaffHome })));
+const Me = lazy(() => import('./staff/Me').then((m) => ({ default: m.Me })));
+const Schedule = lazy(() => import('./staff/Schedule').then((m) => ({ default: m.Schedule })));
+const Timesheets = lazy(() => import('./staff/Timesheets').then((m) => ({ default: m.Timesheets })));
+const Tips = lazy(() => import('./staff/Tips').then((m) => ({ default: m.Tips })));
+const Logbook = lazy(() => import('./staff/Logbook').then((m) => ({ default: m.Logbook })));
+const Payroll = lazy(() => import('./staff/Payroll').then((m) => ({ default: m.Payroll })));
 
 function Home() {
   return (
@@ -36,7 +43,13 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/t/:tagToken" element={<GuestTable />} />
         <Route path="/tip/:token" element={<TipLanding />} />
         <Route path="/staff" element={<StaffShell />}>
-          <Route index element={<Navigate to="floor" replace />} />
+          <Route index element={<StaffHome />} />
+          <Route path="me" element={<Me />} />
+          <Route path="schedule" element={<Schedule />} />
+          <Route path="timesheets" element={<Timesheets />} />
+          <Route path="tips" element={<Tips />} />
+          <Route path="logbook" element={<Logbook />} />
+          <Route path="payroll" element={<Payroll />} />
           <Route path="floor" element={<Floor />} />
           <Route path="station/:station" element={<Station />} />
           <Route path="menu" element={<MenuPhotos />} />

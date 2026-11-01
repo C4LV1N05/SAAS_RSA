@@ -644,7 +644,7 @@ select {
 /* ============================================================ STAFF */
 .staff-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.75rem 1.25rem;
   padding: 0.75rem var(--gutter);
@@ -652,7 +652,35 @@ select {
   color: var(--enamel);
 }
 
+.staff-bar .nav-scroll {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 1.25rem;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.staff-bar .nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Groups are separated by a thin rule, not labels: the links say enough. */
+.nav-group {
+  display: flex;
+  gap: 1.1rem;
+  flex: none;
+}
+
+.nav-group + .nav-group {
+  padding-left: 1.25rem;
+  border-left: 1px solid rgba(251, 252, 254, 0.25);
+}
+
 .staff-bar a {
+  white-space: nowrap;
   color: var(--enamel);
   text-decoration: none;
   font-weight: 700;
@@ -665,7 +693,13 @@ select {
 }
 
 .staff-bar .spacer {
-  flex: 1;
+  flex: 1 0 0.5rem;
+}
+
+.staff-bar > button,
+.staff-bar > label {
+  flex: none;
+  white-space: nowrap;
 }
 
 .staff-bar select {
@@ -979,4 +1013,814 @@ select {
   width: 20px;
   height: 20px;
   accent-color: var(--leaf);
+}
+
+/* ============================================================ TEAM SCREENS */
+.staff-main.wide {
+  max-width: 1180px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.small {
+  font-size: var(--s-1);
+}
+
+.grow {
+  flex: 1 1 16rem;
+}
+
+.r {
+  text-align: right;
+}
+
+.link.danger {
+  color: var(--chilli);
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.page-head h1 {
+  margin-bottom: 0.25rem;
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.week-nav .btn {
+  min-width: 40px;
+  padding: 0;
+  font-size: var(--s1);
+  line-height: 1;
+}
+
+.week-label {
+  font-weight: 700;
+  min-width: 9.5rem;
+  text-align: center;
+}
+
+.summary-line {
+  margin: 0 0 1.25rem;
+  max-width: 68ch;
+}
+
+.draft-count {
+  color: var(--rim);
+}
+
+.block {
+  margin: 1.75rem 0;
+}
+
+.block h2,
+.proof h2,
+.emp201 h2 {
+  font-family: var(--display);
+  font-size: var(--s1);
+  margin: 0 0 0.75rem;
+}
+
+/* Form controls on the team screens */
+.staff-main label {
+  font-size: var(--s-1);
+  font-weight: 700;
+}
+
+.staff-main input:not([type='checkbox']):not([type='file']),
+.staff-main select,
+.staff-main textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.7rem;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font-size: var(--s0);
+  font-weight: 400;
+}
+
+.staff-main textarea {
+  resize: vertical;
+  font-family: var(--text);
+}
+
+.staff-main .switch,
+.staff-main .task label {
+  font-weight: 400;
+}
+
+.task input {
+  margin-top: 0 !important;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.inline-form > label {
+  flex: 1 1 9rem;
+}
+
+.inline-form p {
+  margin: 0;
+}
+
+.stack {
+  display: block;
+  margin-bottom: 1rem;
+  max-width: 34rem;
+}
+
+/* ------------------------------------------------------------ schedule */
+/* The week is ink and pencil: published shifts are solid enamel-rim navy,
+   drafts are dashed outlines that staff cannot see yet. */
+.roster-scroll {
+  overflow-x: auto;
+  margin: 0 calc(var(--gutter) * -1);
+  padding: 0 var(--gutter) 1rem;
+  outline-offset: -3px;
+}
+
+.roster {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 860px;
+  width: 100%;
+}
+
+.roster th,
+.roster td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.45rem 0.35rem;
+  vertical-align: top;
+  text-align: left;
+}
+
+.roster thead th {
+  font-size: var(--s-1);
+  font-weight: 700;
+  border-bottom: 2px solid var(--rim);
+  white-space: nowrap;
+}
+
+.roster thead th small {
+  display: block;
+  font-weight: 400;
+  color: var(--chip);
+}
+
+.roster thead th[data-today] {
+  box-shadow: inset 0 -4px 0 var(--saffron);
+}
+
+.roster .who {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--enamel);
+  min-width: 9.5rem;
+  max-width: 11rem;
+  padding-left: 0;
+}
+
+.roster tbody .who {
+  font-size: var(--s0);
+}
+
+.roster tbody .who small {
+  display: block;
+  font-weight: 400;
+  font-size: var(--s-1);
+  color: var(--chip);
+}
+
+.roster [data-over] {
+  color: var(--chilli);
+  font-weight: 700;
+}
+
+.roster td {
+  min-width: 6.5rem;
+}
+
+.shift-chip {
+  display: block;
+  width: 100%;
+  margin-bottom: 0.3rem;
+  padding: 0.4rem 0.45rem;
+  border-radius: 9px;
+  border: 2px solid var(--rim);
+  background: var(--rim);
+  color: var(--enamel);
+  text-align: left;
+  font-size: var(--s-1);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shift-chip small {
+  display: block;
+  font-weight: 400;
+}
+
+.shift-chip[data-status='draft'] {
+  background: var(--paper);
+  color: var(--rim);
+  border-style: dashed;
+}
+
+.add-shift {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  border: 1.5px dashed transparent;
+  border-radius: 9px;
+  background: none;
+  color: var(--chip);
+  font-size: var(--s1);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.roster td:hover .add-shift,
+.add-shift:focus-visible {
+  border-color: var(--line);
+  color: var(--rim);
+}
+
+/* Once a day has a shift, its add button shrinks and appears on hover, so rows stay compact. */
+.shift-chip + .add-shift,
+.shift-chip ~ .add-shift {
+  min-height: 22px;
+  font-size: var(--s0);
+  opacity: 0;
+}
+
+.roster td:hover .add-shift,
+.roster .add-shift:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .add-shift,
+  .shift-chip ~ .add-shift {
+    border-color: var(--line);
+    opacity: 1;
+  }
+}
+
+.publish-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 1.5rem calc(var(--gutter) * -1) 0;
+  padding: 0.8rem var(--gutter);
+  background: var(--rim);
+  color: var(--enamel);
+}
+
+.publish-bar > span:first-child {
+  flex: 1 1 16rem;
+}
+
+.publish-bar .quiet {
+  color: #c9d3e2;
+}
+
+/* Bottom-sheet dialog shared by the team screens */
+.sheet-dialog {
+  width: min(560px, 100vw);
+  max-width: 100vw;
+  max-height: 92dvh;
+  margin: auto auto 0;
+  padding: 1.25rem var(--gutter) 1.5rem;
+  border: none;
+  border-radius: 20px 20px 0 0;
+  background: var(--enamel);
+  color: var(--rim);
+  overflow-y: auto;
+}
+
+.sheet-dialog::backdrop {
+  background: rgba(27, 47, 78, 0.45);
+}
+
+@media (min-width: 640px) {
+  .sheet-dialog {
+    margin: auto;
+    border-radius: 20px;
+  }
+}
+
+.sheet-dialog h2 {
+  font-family: var(--display);
+  font-size: var(--s2);
+  margin: 0;
+}
+
+.sheet-dialog label {
+  font-size: var(--s-1);
+  font-weight: 700;
+}
+
+.sheet-dialog input,
+.sheet-dialog select {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.25rem;
+  padding: 0.5rem 0.7rem;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font-size: var(--s0);
+  font-weight: 400;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.field-grid label:first-child {
+  grid-column: 1 / -1;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.findings {
+  margin: 1rem 0;
+}
+
+.finding {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border-left: 4px solid var(--saffron);
+  background: #fff6e2;
+}
+
+.finding[data-severity='block'] {
+  border-color: var(--chilli);
+  background: #fbeceb;
+}
+
+.finding input {
+  margin-top: 0.2rem !important;
+}
+
+/* ------------------------------------------------------------ timesheets */
+.day-head {
+  font-family: var(--display);
+  font-size: var(--s1);
+  margin: 1.75rem 0 0.25rem;
+}
+
+.time-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) 1fr auto;
+  gap: 0.4rem 1rem;
+  align-items: start;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  .time-row {
+    grid-template-columns: 1fr auto;
+  }
+  .time-times {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.time-who {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+}
+
+.status-chip {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: var(--s-1);
+  font-weight: 700;
+  background: var(--enamel-shade);
+  color: var(--chip);
+}
+
+.status-chip[data-status='submitted'] {
+  background: #fff1cf;
+  color: #7a5200;
+}
+
+.status-chip[data-status='approved'] {
+  background: #e3f1e8;
+  color: var(--leaf);
+}
+
+.status-chip[data-status='open'] {
+  background: var(--rim);
+  color: var(--enamel);
+}
+
+.time-times {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.big-times {
+  font-size: var(--s1);
+  font-weight: 700;
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flags li {
+  padding: 0.05rem 0.5rem;
+  border-radius: 6px;
+  background: #fff1cf;
+  color: #7a5200;
+  font-size: var(--s-1);
+}
+
+.time-actions {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: end;
+}
+
+.edit-times {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  background: var(--enamel-shade);
+  border-radius: 12px;
+}
+
+.edit-times > label:not(.grow) {
+  flex: 0 1 8rem;
+}
+
+.edit-times .row,
+.edit-times p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------ tips, payroll */
+.date-pick input {
+  margin-top: 0 !important;
+}
+
+.plain-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plain-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.plain-list li.total {
+  border-bottom: none;
+  border-top: 2px solid var(--rim);
+  font-weight: 700;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table thead th {
+  font-size: var(--s-1);
+  border-bottom: 2px solid var(--rim);
+}
+
+.data-table tfoot th,
+.data-table tfoot td {
+  border-bottom: none;
+  border-top: 2px solid var(--rim);
+  font-weight: 700;
+}
+
+.data-table .r {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.data-table summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.slip-lines {
+  margin: 0.5rem 0 0.25rem;
+  padding: 0;
+  list-style: none;
+  font-size: var(--s-1);
+}
+
+.slip-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.2rem 0;
+}
+
+.slip-lines li[data-kind='employer_contribution'] {
+  color: var(--chip);
+}
+
+.slip-lines .review {
+  color: #7a5200;
+}
+
+.check-list {
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.check-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.check-list .switch {
+  font-size: var(--s0);
+}
+
+/* EMP201: the figures the owner types into eFiling, set like a stamped slip */
+.emp201 {
+  margin: 1.75rem 0;
+  padding: 1.1rem 1.2rem;
+  border: 2px solid var(--rim);
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.emp201 dl {
+  margin: 0.75rem 0 0;
+}
+
+.emp201 dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.emp201 dt {
+  font-weight: 400;
+}
+
+.emp201 dd {
+  margin: 0;
+}
+
+.emp201 .grand {
+  border-bottom: none;
+  padding-top: 0.6rem;
+  font-family: var(--display);
+  font-size: var(--s1);
+  font-weight: 800;
+}
+
+/* ------------------------------------------------------------ log book */
+.compose {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.25rem;
+}
+
+.compose .row label {
+  font-weight: 400;
+}
+
+.compose select {
+  margin-top: 0 !important;
+  width: auto !important;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+}
+
+.chip-toggle {
+  min-height: 36px;
+  padding: 0 0.8rem;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: var(--s-1);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip-toggle[aria-pressed='true'] {
+  background: var(--rim);
+  border-color: var(--rim);
+  color: var(--enamel);
+}
+
+.log-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-entry {
+  padding: 1rem 0 1rem 1rem;
+  border-left: 4px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.log-entry[data-category='incident'],
+.log-entry[data-category='disciplinary'] {
+  border-left-color: var(--chilli);
+}
+
+.log-entry[data-category='maintenance'] {
+  border-left-color: var(--saffron);
+}
+
+.log-entry[data-category='handover'] {
+  border-left-color: var(--rim);
+}
+
+.log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  font-size: var(--s-1);
+}
+
+.log-cat {
+  font-weight: 700;
+}
+
+.log-body {
+  margin: 0.35rem 0 0.5rem;
+  white-space: pre-wrap;
+  max-width: 68ch;
+}
+
+.log-entry > p.small {
+  margin: 0 0 0.5rem;
+}
+
+.ack-done {
+  font-size: var(--s-1);
+  color: var(--leaf);
+  font-weight: 700;
+}
+
+.proof {
+  margin: 2rem 0 0;
+  padding-top: 1.25rem;
+  border-top: 2px solid var(--rim);
+}
+
+.proof p {
+  max-width: 68ch;
+}
+
+/* ------------------------------------------------------------ my shifts */
+.staff-main.me {
+  max-width: 560px;
+}
+
+/* The clock: an enamel mug, navy with a white rim, numerals in the display face */
+.clock-card {
+  margin: 0.5rem 0 1.5rem;
+  padding: 1.4rem 1.25rem 1.25rem;
+  border-radius: 22px;
+  background: var(--rim);
+  color: var(--enamel);
+  /* A thin white line set in from the edge, like the rim on an enamel mug */
+  box-shadow: inset 0 0 0 7px var(--rim), inset 0 0 0 9px rgba(251, 252, 254, 0.75);
+}
+
+.clock-card[data-state='in'] {
+  box-shadow: inset 0 0 0 7px var(--rim), inset 0 0 0 10px var(--saffron);
+}
+
+.clock-label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.clock-big {
+  margin: 0.15rem 0;
+  font-size: clamp(2.6rem, 13vw, var(--s6));
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.clock-sub {
+  margin: 0 0 1.1rem;
+  color: #c9d3e2;
+}
+
+.clock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.clock-actions .btn {
+  flex: 1 1 9rem;
+  min-height: 56px;
+  font-size: var(--s1);
+}
+
+.clock-actions .btn:not(.btn-go) {
+  border-color: var(--enamel);
+  color: var(--enamel);
+}
+
+.clock-pending {
+  margin: 1rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(242, 179, 61, 0.18);
+  font-size: var(--s-1);
+}
+
+.shift-list li span:first-child {
+  font-weight: 700;
 }

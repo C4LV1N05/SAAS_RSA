@@ -40,7 +40,21 @@ const Override = z.object({ ruleKey: z.string(), subjectId: z.string(), reason: 
 const PublishShifts = z.object({
   shiftIds: z.array(z.string().uuid()).min(1).max(500),
   overrides: z.array(Override).default([]),
+  /** Check the BCEA and report findings without publishing anything. */
+  dryRun: z.boolean().default(false),
 });
+
+const EditShift = z
+  .object({
+    employeeId: z.string().uuid().nullable().optional(),
+    jobRoleId: z.string().uuid().nullable().optional(),
+    startsAt: z.coerce.date().optional(),
+    endsAt: z.coerce.date().optional(),
+    plannedBreakMinutes: z.number().int().min(0).max(180).optional(),
+  })
+  .refine((s) => Object.keys(s).length > 0, { message: 'Nothing to change' });
+
+const IdParam = z.object({ id: z.string().uuid() });
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
@@ -74,6 +88,41 @@ export function registerShiftRoutes(app: FastifyInstance, deps: Deps) {
         .orderBy(asc(shifts.startsAt)),
     );
     return { shifts: rows };
+  });
+
+  /** Change a draft shift. Published shifts are changed by cancelling and re-publishing. */
+  app.patch('/v1/shifts/:id', { preHandler: requirePermission('schedule:write') }, async (request) => {
+    const { id } = IdParam.parse(request.params);
+    const body = EditShift.parse(request.body);
+    return tenantTx(deps, request, async (tx, auth) => {
+      const [before] = await tx.select().from(shifts).where(eq(shifts.id, id));
+      if (!before) throw notFound('Shift');
+      if (before.status !== 'draft') throw new HttpError(409, 'not_draft', `Shift is ${before.status}`);
+      const startsAt = body.startsAt ?? before.startsAt;
+      const endsAt = body.endsAt ?? before.endsAt;
+      if (endsAt <= startsAt) throw new HttpError(400, 'invalid_times', 'The shift must end after it starts');
+      const [after] = await tx.update(shifts).set(body).where(eq(shifts.id, id)).returning();
+      await audit(tx, auth, { action: 'shift.edited', entity: 'shift', entityId: id, before, after });
+      return { shift: after! };
+    });
+  });
+
+  /** Delete a draft; a published shift is cancelled instead, so the employee's record stays. */
+  app.delete('/v1/shifts/:id', { preHandler: requirePermission('schedule:write') }, async (request) => {
+    const { id } = IdParam.parse(request.params);
+    return tenantTx(deps, request, async (tx, auth) => {
+      const [before] = await tx.select().from(shifts).where(eq(shifts.id, id));
+      if (!before) throw notFound('Shift');
+      if (before.status === 'draft') {
+        await tx.delete(shifts).where(eq(shifts.id, id));
+        await audit(tx, auth, { action: 'shift.deleted', entity: 'shift', entityId: id, before });
+        return { deleted: true, cancelled: false };
+      }
+      if (before.status === 'cancelled') return { deleted: false, cancelled: true };
+      await tx.update(shifts).set({ status: 'cancelled' }).where(eq(shifts.id, id));
+      await audit(tx, auth, { action: 'shift.cancelled', entity: 'shift', entityId: id, before });
+      return { deleted: false, cancelled: true };
+    });
   });
 
   /**
@@ -129,6 +178,7 @@ export function registerShiftRoutes(app: FastifyInstance, deps: Deps) {
       const overrideFor = (f: ComplianceFinding) =>
         body.overrides.find((o) => o.ruleKey === f.ruleKey && o.subjectId === f.subjectId);
       const unresolved = findings.filter((f) => f.severity === 'block' && !overrideFor(f));
+      if (body.dryRun) return { findings, notified: 0, dryRun: true };
       if (unresolved.length) {
         throw new HttpError(422, 'compliance_blocked', 'Publishing would breach the BCEA', { findings: unresolved });
       }
@@ -180,9 +230,14 @@ export function registerShiftRoutes(app: FastifyInstance, deps: Deps) {
         dedupeKey: `schedule_published:${r.employeeId}:${batchKey}`,
       }));
       const notified = await enqueueNotifications(tx, jobs);
-      return { findings, notified };
+      return { findings, notified, dryRun: false };
     });
 
-    return { published: body.shiftIds.length, findings: result.findings, notified: result.notified };
+    return {
+      published: result.dryRun ? 0 : body.shiftIds.length,
+      dryRun: result.dryRun,
+      findings: result.findings,
+      notified: result.notified,
+    };
   });
 }
