@@ -81,7 +81,7 @@ describe.skipIf(!OWNER_URL || !APP_URL)('API flow', () => {
     closeDb = () => pool.end();
     const verify = createVerifier({
       NODE_ENV: 'test', PORT: 0, LOG_LEVEL: 'silent', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api',
-      AUTH_CLAIM_NAMESPACE: 'https://saas-rsa.app/', GUEST_APP_URL: 'https://order.example', AUTH_DEV_SECRET: SECRET,
+      AUTH_CLAIM_NAMESPACE: 'https://saas-rsa.app/', GUEST_APP_URL: 'https://order.example', CORS_ORIGINS: '', AUTH_DEV_SECRET: SECRET,
     });
     app = buildApp({ db, verify, authActionSecret: ACTION_SECRET, logLevel: 'silent' });
 

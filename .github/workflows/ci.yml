@@ -29,6 +29,8 @@ jobs:
         run: pnpm --filter @saas-rsa/domain test
       - name: Worker tests (Twilio adapters, channel fallback)
         run: pnpm --filter @saas-rsa/worker test
+      - name: Web app tests (bill choices, tips, live stream parsing)
+        run: pnpm --filter @saas-rsa/web test
       - run: pnpm build
       - name: Compile Azure infrastructure (Bicep)
         run: |
@@ -162,8 +164,29 @@ jobs:
       - name: Smoke test
         run: |
           fqdn=$(az containerapp show -g "$RG" -n "$PREFIX-api" --query properties.configuration.ingress.fqdn -o tsv)
+          echo "API_URL=https://$fqdn" >> "$GITHUB_ENV"
           for i in $(seq 1 30); do
             if curl -fsS "https://$fqdn/health"; then echo; exit 0; fi
             sleep 10
           done
           echo "::error::API did not become healthy"; exit 1
+      # --- Web app (guest ordering + staff screens) on Azure Static Web Apps ---
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build web app against the live API
+        run: pnpm --filter @saas-rsa/web build
+        env:
+          VITE_API_URL: ${{ env.API_URL }}
+          VITE_AUTH0_DOMAIN: ${{ vars.AUTH0_DOMAIN }}
+          VITE_AUTH0_CLIENT_ID: ${{ vars.AUTH0_SPA_CLIENT_ID }}
+          VITE_AUTH0_AUDIENCE: ${{ vars.AUTH0_AUDIENCE || 'https://api.saas-rsa.app' }}
+      - name: Deploy web app
+        run: |
+          token=$(az staticwebapp secrets list -n "$PREFIX-web" -g "$RG" --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          npx --yes @azure/static-web-apps-cli@2 deploy apps/web/dist --deployment-token "$token" --env production

@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import cors from '@fastify/cors';
 import type { Verifier } from './auth';
 import type { Deps } from './context';
 import { HttpError, toHttpError } from './errors';
@@ -20,6 +21,8 @@ export interface AppOptions extends Deps {
   /** Live station updates; omitted in tests that do not need streaming. */
   events?: ServiceEventBus;
   guestAppUrl?: string;
+  /** Browser origins allowed to call the API (the guest/staff web app). */
+  corsOrigins?: string[];
   logLevel?: string;
 }
 
@@ -35,7 +38,19 @@ export function buildApp(options: AppOptions): FastifyInstance {
     genReqId: () => crypto.randomUUID(),
   });
 
+  const origins = new Set([
+    ...(options.corsOrigins ?? []),
+    ...(options.guestAppUrl ? [new URL(options.guestAppUrl).origin] : []),
+  ]);
+  void app.register(cors, {
+    origin: (origin, cb) => cb(null, !origin || origins.has(origin)),
+    methods: ['GET', 'POST', 'PUT', 'PATCH'],
+    allowedHeaders: ['authorization', 'content-type', 'idempotency-key', 'x-guest-session'],
+    maxAge: 600,
+  });
+
   app.addHook('onRequest', async (request) => {
+    if (request.method === 'OPTIONS') return; // CORS preflight carries no credentials
     const route = request.routeOptions.url ?? '';
     // Guest routes authenticate with the table session token instead (routes/guest.ts).
     if (PUBLIC_ROUTES.has(route) || route.startsWith(`${GUEST_PREFIX}/`)) return;

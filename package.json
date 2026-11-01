@@ -9,13 +9,15 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter @saas-rsa/api --filter @saas-rsa/worker build",
+    "build": "pnpm --filter @saas-rsa/api --filter @saas-rsa/worker --filter @saas-rsa/web build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:unit": "pnpm --filter @saas-rsa/domain test",
     "db:migrate": "pnpm --filter @saas-rsa/db migrate",
     "dev:api": "pnpm --filter @saas-rsa/api dev",
-    "dev:worker": "pnpm --filter @saas-rsa/worker dev"
+    "dev:worker": "pnpm --filter @saas-rsa/worker dev",
+    "dev:web": "pnpm --filter @saas-rsa/web dev",
+    "demo": "pnpm --filter @saas-rsa/api demo"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

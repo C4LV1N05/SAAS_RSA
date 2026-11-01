@@ -442,9 +442,12 @@ export function registerServeRoutes(app: FastifyInstance, deps: Deps, opts: { ev
     if (auth.role !== 'owner' && auth.role !== 'payroll_admin' && !auth.locationIds.includes(locationId)) {
       throw new HttpError(403, 'forbidden', 'You do not work at this location');
     }
+    // Keep headers already set by plugins (CORS) before taking over the raw response.
+    const preset = reply.getHeaders() as Record<string, string | number | string[]>;
     reply.hijack();
     const res = reply.raw;
     res.writeHead(200, {
+      ...preset,
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache, no-transform',
       connection: 'keep-alive',

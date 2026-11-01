@@ -20,6 +20,8 @@ const EnvSchema = z
     AUTH_ACTION_SECRET: optional(z.string().min(32)),
     // Base URL of the guest ordering app; QR codes point at <url>/t/<token>
     GUEST_APP_URL: z.string().url().default('https://order.saas-rsa.app'),
+    // Extra browser origins allowed to call the API (comma-separated). The guest app's origin is always allowed.
+    CORS_ORIGINS: z.string().default(''),
     // Local development only: HS256 shared secret used when AUTH_JWKS_URL is empty
     AUTH_DEV_SECRET: optional(z.string().min(32)),
   })

@@ -222,10 +222,14 @@ export function registerGuestRoutes(app: FastifyInstance, deps: Deps) {
   app.get(`${GUEST_PREFIX}/payments`, async (request) =>
     guestTx(deps, request, async (tx, ctx) => {
       const rows = await tx
-        .select({ id: payments.id, mode: payments.mode, amountCents: payments.amountCents, tipCents: payments.tipCents, status: payments.status })
+        .select({
+          id: payments.id, mode: payments.mode, amountCents: payments.amountCents, tipCents: payments.tipCents,
+          status: payments.status, guestSessionId: payments.guestSessionId,
+        })
         .from(payments)
         .where(and(eq(payments.tabId, ctx.tabId), inArray(payments.status, ['requested', 'succeeded'])));
-      return { payments: rows };
+      // Everyone at the table sees the table's payments; "mine" marks this guest's own.
+      return { payments: rows.map(({ guestSessionId, ...p }) => ({ ...p, mine: guestSessionId === ctx.userId })) };
     }),
   );
 }

@@ -53,8 +53,12 @@ param auth0Audience string = 'https://api.saas-rsa.app'
 @description('Shared secret between the Auth0 Post-Login Action and the API (32+ characters).')
 param authActionSecret string
 
-@description('Guest ordering app URL; table QR codes point at <url>/t/<token>.')
-param guestAppUrl string = 'https://order.saas-rsa.app'
+@description('Guest ordering app URL (your custom domain). Empty = the Static Web App address.')
+param guestAppUrl string = ''
+
+@description('Static Web Apps host the static web app globally; this is only where its metadata lives (it stores no personal data).')
+@allowed(['westeurope', 'eastus2', 'centralus', 'westus2', 'eastasia'])
+param webLocation string = 'westeurope'
 
 // --- Twilio (all optional: without them the worker logs messages instead of sending) ---
 param twilioAccountSid string = ''
@@ -72,6 +76,20 @@ var suffix = uniqueString(resourceGroup().id)
 var pgServerName = toLower('${namePrefix}-pg-${suffix}')
 var dbName = 'saas_rsa'
 var useGhcrAuth = !empty(ghcrToken)
+
+// Guest ordering app and staff screens (static files; all data comes from the API).
+resource web 'Microsoft.Web/staticSites@2023-12-01' = {
+  name: '${namePrefix}-web'
+  location: webLocation
+  sku: {
+    name: 'Free'
+    tier: 'Free'
+  }
+  properties: {}
+}
+
+var webOrigin = 'https://${web.properties.defaultHostname}'
+var effectiveGuestAppUrl = empty(guestAppUrl) ? webOrigin : guestAppUrl
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: '${namePrefix}-logs'
@@ -182,7 +200,8 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AUTH_ISSUER', value: 'https://${auth0Domain}/' }
             { name: 'AUTH_AUDIENCE', value: auth0Audience }
             { name: 'AUTH_ACTION_SECRET', secretRef: 'auth-action-secret' }
-            { name: 'GUEST_APP_URL', value: guestAppUrl }
+            { name: 'GUEST_APP_URL', value: effectiveGuestAppUrl }
+            { name: 'CORS_ORIGINS', value: webOrigin }
           ]
           probes: [
             { type: 'Liveness', httpGet: { path: '/health', port: 3000 }, periodSeconds: 30 }
@@ -276,5 +295,6 @@ resource migrate 'Microsoft.App/jobs@2024-03-01' = {
 }
 
 output apiUrl string = 'https://${api.properties.configuration.ingress.fqdn}'
+output webUrl string = effectiveGuestAppUrl
 output postgresHost string = pgHost
 output migrateJobName string = migrate.name

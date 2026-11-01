@@ -17,12 +17,14 @@ A South African platform for restaurants and hospitality, modelled on 7shifts an
 | Serve | Split bills (own items, the rest, equal shares), paid on the till's card machine | API + schema |
 | Serve | Tips to the waiter by personal QR code or table assignment | API + schema |
 | Serve | Till sync: signed webhooks for every tab, order, void and payment | API + worker |
+| Serve | Guest ordering app; floor, kitchen and bar screens for staff | Web app |
 
 ## Repository layout
 
 ```
 apps/
   api/        Fastify REST API (Zod validation, JWT auth, tenant-scoped transactions)
+  web/        Guest ordering app (/t/<table code>) and staff screens (/staff): React + Vite
   worker/     Background worker: Twilio messages (WhatsApp -> SMS) and till webhooks, from database outboxes
 packages/
   domain/     Pure TypeScript: BCEA segmentation + checks, SA payroll, tips, hash chain, rule registry
@@ -51,7 +53,16 @@ pnpm db:migrate                          # tables, RLS, and the saas_app / saas_
 pnpm --filter @saas-rsa/db seed          # national rule versions + public holidays
 pnpm dev:api                             # http://localhost:3000/health
 DATABASE_URL=$DATABASE_WORKER_URL pnpm dev:worker   # logs messages until Twilio is set
+pnpm dev:web                             # http://localhost:5173
 ```
+
+**Try the screens with a demo restaurant.** This creates "Ember & Salt" with a menu, stock, six tables and a waiter's tip code. It prints each table's ordering link and 15-minute staff tokens:
+
+```bash
+DATABASE_OWNER_URL=... AUTH_DEV_SECRET=... GUEST_APP_URL=http://localhost:5173 pnpm demo
+```
+
+Open a table link in a phone-sized window to order, and `http://localhost:5173/staff` in another window (paste the waiter token) to confirm the table, watch the kitchen and bar screens, and record payments.
 
 ## Tests
 
@@ -62,6 +73,7 @@ pnpm test:unit                           # domain engine: payroll, BCEA, bills, 
 pnpm --filter @saas-rsa/db test          # RLS: tenant, location, role and append-only rules as saas_app
 pnpm --filter @saas-rsa/api test         # end-to-end: workforce flow, Serve flow, Auth0 claims
 pnpm --filter @saas-rsa/worker test      # Twilio adapters, outbox delivery, till webhooks
+pnpm --filter @saas-rsa/web test         # pay choices, tips, docket grouping, live stream parsing
 ```
 
 The payroll tests use hand-worked examples from the SARS 2026/27 tables. Validate them against SARS and a registered tax practitioner before the first live payroll.
@@ -70,10 +82,10 @@ The payroll tests use hand-worked examples from the SARS 2026/27 tables. Validat
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-1. **checks**: install, typecheck, domain and worker tests, build
+1. **checks**: install, typecheck, domain, worker and web tests, build
 2. **integration**: PostgreSQL 16 service; migrate twice (second run must be a no-op), seed, RLS tests, API tests
 3. **images**: builds `api` and `worker` containers; on `main` it publishes them to `ghcr.io/c4lv1n05/saas_rsa-api` and `-worker`
-4. **deploy** (on `main`, once Azure is set up): runs the migration job, rolls out the API and worker, then checks `/health`. See `docs/DEPLOY_AZURE.md`.
+4. **deploy** (on `main`, once Azure is set up): runs the migration job, rolls out the API and worker, checks `/health`, then builds and publishes the web app. See `docs/DEPLOY_AZURE.md`.
 
 `main` is protected: the first two stages must pass before changes merge.
 

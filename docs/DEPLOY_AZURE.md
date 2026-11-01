@@ -34,7 +34,7 @@ az deployment group create -g saas-rsa-prod \
 az containerapp job start -g saas-rsa-prod -n saasrsa-migrate
 ```
 
-The output `apiUrl` is the API's public address. Keep `ACTION` for step 3.
+The output `apiUrl` is the API's public address, and `webUrl` is the guest ordering app and staff screens (Azure Static Web Apps). Table QR codes point at `webUrl`. To use your own domain (e.g. `order.yourrestaurant.co.za`), add it to the Static Web App in the portal, then redeploy with `guestAppUrl=https://order.yourrestaurant.co.za`. Keep `ACTION` for step 3.
 
 **Container images.** The repository is public, but GitHub can still create the container packages as private. Either make the `saas_rsa-api` and `saas_rsa-worker` packages public (GitHub profile → Packages → package settings → Change visibility), or pass `ghcrUsername` and a `ghcrToken` with `read:packages` to the deployment.
 
@@ -63,6 +63,8 @@ Then in GitHub → Settings → Secrets and variables → Actions → **Variable
 | `AZURE_SUBSCRIPTION_ID` | `$SUB` |
 | `AZURE_RESOURCE_GROUP` | `saas-rsa-prod` |
 
+For the staff screens' sign-in, also add `AUTH0_DOMAIN`, `AUTH0_SPA_CLIENT_ID` and `AUTH0_AUDIENCE` (step 3).
+
 The deploy job stays off until `AZURE_CLIENT_ID` is set. It runs in the GitHub `production` environment; you can add a required reviewer there to approve each release.
 
 ## 3. Auth0
@@ -71,7 +73,7 @@ The deploy job stays off until `AZURE_CLIENT_ID` is set. It runs in the GitHub `
 2. **Staff sign-in by SMS:** Authentication → Passwordless → SMS. Choose Twilio as the provider and enter your Twilio Account SID, Auth Token and sender number, so one Twilio account serves both sign-in codes and staff messages.
 3. **Managers and owners:** keep Username-Password with MFA on (Security → Multi-factor Auth).
 4. **Claims Action:** Actions → Library → Create Action → *Login / Post Login*. Paste `infra/auth0/post-login-action.js`. Add secrets `API_BASE_URL` (the `apiUrl` output) and `AUTH_ACTION_SECRET` (the `ACTION` value from step 1). Deploy it, then add it to Actions → Triggers → post-login.
-5. **Apps:** create a Single Page Application (manager web app) and a Native application (staff mobile app). Request the audience `https://api.saas-rsa.app` when they log in.
+5. **Staff screens app:** create a Single Page Application. Set Allowed Callback URLs, Allowed Logout URLs and Allowed Web Origins to `<webUrl>/staff` (and `http://localhost:5173/staff` for development). Put its Client ID in the GitHub variable `AUTH0_SPA_CLIENT_ID`, and turn on refresh token rotation.
 
 **How staff get access:** a manager adds an employee with their mobile number. The employee signs in with an SMS code. On that first login, the Action calls the API, which links the Auth0 account to the invited record by verified phone number. Someone with no invitation is refused.
 

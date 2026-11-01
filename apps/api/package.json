@@ -11,9 +11,11 @@
     "start": "node dist/index.js",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo": "tsx scripts/demo.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.1",
     "@saas-rsa/db": "workspace:*",
     "@saas-rsa/domain": "workspace:*",
     "drizzle-orm": "^0.38.3",

@@ -75,7 +75,7 @@ describe.skipIf(!OWNER_URL || !APP_URL)('Serve: table ordering alongside the til
     bus.subscribe({ orgId: ids.org, locationId: ids.loc, send: (e) => events.push(e) });
     const verify = createVerifier({
       NODE_ENV: 'test', PORT: 0, LOG_LEVEL: 'silent', DATABASE_URL: APP_URL!, AUTH_AUDIENCE: 'saas-rsa-api',
-      AUTH_CLAIM_NAMESPACE: 'https://saas-rsa.app/', GUEST_APP_URL: 'https://order.example', AUTH_DEV_SECRET: SECRET,
+      AUTH_CLAIM_NAMESPACE: 'https://saas-rsa.app/', GUEST_APP_URL: 'https://order.example', CORS_ORIGINS: '', AUTH_DEV_SECRET: SECRET,
     });
     app = buildApp({ db, verify, events: bus, guestAppUrl: 'https://order.example', logLevel: process.env.TEST_LOG ?? 'silent' });
     closeAll = async () => {
@@ -212,6 +212,10 @@ describe.skipIf(!OWNER_URL || !APP_URL)('Serve: table ordering alongside the til
     const a = await guest(state.guestA, 'POST', '/payments', { mode: 'items', itemIds: mine, tipCents: 5_000, tipCode: state.tipCode });
     expect(a.json().payment).toMatchObject({ amountCents: 34_500, tipCents: 5_000, totalCents: 39_500, status: 'requested' });
     state.payA = a.json().payment.id;
+
+    // Guest B sees A's request, marked as not theirs.
+    const seenByB = (await guest(state.guestB, 'GET', '/payments')).json().payments;
+    expect(seenByB).toEqual([expect.objectContaining({ amountCents: 34_500, status: 'requested', mine: false })]);
 
     const clash = await guest(state.guestB, 'POST', '/payments', { mode: 'items', itemIds: [mine[0]] });
     expect(clash.json().error.code).toBe('item_unavailable');

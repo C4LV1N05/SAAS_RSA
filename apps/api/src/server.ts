@@ -13,6 +13,7 @@ const app = buildApp({
   ...(env.AUTH_ACTION_SECRET ? { authActionSecret: env.AUTH_ACTION_SECRET } : {}),
   events,
   guestAppUrl: env.GUEST_APP_URL,
+  corsOrigins: env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
   logLevel: env.LOG_LEVEL,
 });
 const listener = listenForServiceEvents(env.DATABASE_URL, events, app.log);

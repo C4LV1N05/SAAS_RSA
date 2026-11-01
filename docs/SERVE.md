@@ -23,6 +23,23 @@ Guest phone ──scan table QR/NFC──> guest session on the table's tab
 
 Prices on the menu include VAT. The bill shows the VAT included, at 15% (a dated rule version).
 
+## The screens (`apps/web`)
+
+| Address | Who | What it does |
+| --- | --- | --- |
+| `/t/<table code>` | Guests | The table's QR or NFC code opens this: menu, order, bill with "yours" marked, pay (own items, whole bill, equal split) with a tip |
+| `/tip/<tip code>` | Guests | A waiter's tip QR code; the tip goes to that waiter when the guest pays |
+| `/staff/floor` | Waiters | Tables needing action first: confirm new tables, bring the card machine (amount and tip), record the till slip number, close tables paid at the till |
+| `/staff/station/kitchen` and `/staff/station/bar` | Kitchen, bar | A live docket rail: one ticket per order, oldest first, turning saffron after 10 minutes and red after 20; Start, Ready, Collected |
+
+Design notes:
+
+- **Phones on prepaid data:** guests download about 60 KB of script, with fonts bundled (no Google Fonts call). The staff screens and sign-in code load only on `/staff`.
+- **Connection drops:** orders are retried with the same key, so nothing is sent twice. The bill refreshes every 15 seconds.
+- **Kitchen and bar screens:** they reconnect to the live stream on their own and also poll every 30 seconds as a fallback.
+
+Staff sign in with Auth0 (configure `VITE_AUTH0_*`). Without Auth0, in local development, they paste a development token, for example one from `pnpm demo`.
+
 ## Guest app API
 
 The guest app (a web page the QR code opens) calls these without logging in. After the first call, it sends the session token in the `X-Guest-Session` header.
@@ -69,5 +86,4 @@ Most South African tills don't accept webhooks directly. In practice this URL po
 
 - Online card payment in the guest app (a hosted checkout such as Yoco, Peach Payments or Paystack); today payment is always taken on the till's card machine.
 - Face verification at clock-in: needs a vendor decision, liveness detection, and POPIA consent for biometrics. Clock-in already checks location.
-- The guest web app and the station/floor screens themselves (the API they need is complete).
 - Adapters for specific till vendors.
