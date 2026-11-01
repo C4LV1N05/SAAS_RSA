@@ -95,6 +95,14 @@ export const SA_RULE_VERSIONS: RuleVersion[] = [
     value: { mainMemberCents: 37_600, firstDependantCents: 37_600, additionalDependantCents: 25_400 },
   },
 
+  // --- VAT (menu prices are VAT-inclusive) ---
+  {
+    key: 'vat.rate_bp',
+    value: 1500,
+    effectiveFrom: '2018-04-01',
+    source: 'Value-Added Tax Act 89 of 1991: 15% from 1 April 2018; 2025 increase withdrawn (rate remains 15%)',
+  },
+
   // --- Employment Tax Incentive (from 1 April 2025) ---
   {
     key: 'eti.table',

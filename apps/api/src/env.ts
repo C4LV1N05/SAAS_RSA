@@ -18,6 +18,8 @@ const EnvSchema = z
     AUTH_CLAIM_NAMESPACE: z.string().default('https://saas-rsa.app/'),
     // Shared secret the Auth0 Action sends to /internal/auth/claims
     AUTH_ACTION_SECRET: optional(z.string().min(32)),
+    // Base URL of the guest ordering app; QR codes point at <url>/t/<token>
+    GUEST_APP_URL: z.string().url().default('https://order.saas-rsa.app'),
     // Local development only: HS256 shared secret used when AUTH_JWKS_URL is empty
     AUTH_DEV_SECRET: optional(z.string().min(32)),
   })

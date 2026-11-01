@@ -1,6 +1,6 @@
 # SAAS_RSA
 
-A South African workforce platform for restaurants and hospitality, modelled on 7shifts and rebuilt around South African law: the shift a manager schedules becomes the hour an employee clocks, the rand they are paid, and the line SARS receives.
+A South African platform for restaurants and hospitality, modelled on 7shifts and rebuilt around South African law: the shift a manager schedules becomes the hour an employee clocks, the rand they are paid, and the line SARS receives. Alongside it, **Serve** lets guests order and ask for the bill from their phones while the restaurant keeps its existing till.
 
 **Stack:** TypeScript · Fastify · PostgreSQL 16 with row-level security · Auth0 · Twilio (WhatsApp, SMS) · Azure Container Apps in South Africa North.
 
@@ -12,13 +12,18 @@ A South African workforce platform for restaurants and hospitality, modelled on 
 | Pay | Payroll (PAYE, UIF, SDL, ETI, coded payslip lines, EMP201 values) | Engine + preview API |
 | Pay | Tip Management (pools, FOH/BOH split, kept out of the NMW test) | Engine + API |
 | Retain | Manager Log Book (append-only, hash-chained, revisions) | API + schema |
+| Serve | Table ordering by QR/NFC, kitchen and bar routing with live screens | API + schema |
+| Serve | Stock deducted per order, sold-out items, deliveries and stock-takes | API + schema |
+| Serve | Split bills (own items, the rest, equal shares), paid on the till's card machine | API + schema |
+| Serve | Tips to the waiter by personal QR code or table assignment | API + schema |
+| Serve | Till sync: signed webhooks for every tab, order, void and payment | API + worker |
 
 ## Repository layout
 
 ```
 apps/
   api/        Fastify REST API (Zod validation, JWT auth, tenant-scoped transactions)
-  worker/     Notification worker: delivers the PostgreSQL outbox via Twilio (WhatsApp -> SMS)
+  worker/     Background worker: Twilio messages (WhatsApp -> SMS) and till webhooks, from database outboxes
 packages/
   domain/     Pure TypeScript: BCEA segmentation + checks, SA payroll, tips, hash chain, rule registry
   db/         Drizzle schema, migration runner, seed, withTenant()
@@ -29,6 +34,7 @@ db/
   migrations/ SQL source of truth: tables, RLS policies, immutability triggers
 docs/
   ARCHITECTURE.md   Decisions, assumptions awaiting sign-off, next steps
+  SERVE.md          Table ordering: flow, guest API, till webhook contract
   DEPLOY_AZURE.md   One-time Azure, Auth0 and Twilio setup
   BLUEPRINT.md      The original architectural blueprint
 ```
@@ -51,11 +57,11 @@ DATABASE_URL=$DATABASE_WORKER_URL pnpm dev:worker   # logs messages until Twilio
 
 ```bash
 pnpm typecheck
-pnpm test:unit                           # domain engine: 50 tests, no database
+pnpm test:unit                           # domain engine: payroll, BCEA, bills, stock, tips (no database)
 # With a migrated + seeded database (see .env.example):
 pnpm --filter @saas-rsa/db test          # RLS: tenant, location, role and append-only rules as saas_app
-pnpm --filter @saas-rsa/api test         # end-to-end flow + Auth0 claims endpoint
-pnpm --filter @saas-rsa/worker test      # Twilio adapters; outbox delivery as saas_worker
+pnpm --filter @saas-rsa/api test         # end-to-end: workforce flow, Serve flow, Auth0 claims
+pnpm --filter @saas-rsa/worker test      # Twilio adapters, outbox delivery, till webhooks
 ```
 
 The payroll tests use hand-worked examples from the SARS 2026/27 tables. Validate them against SARS and a registered tax practitioner before the first live payroll.

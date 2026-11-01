@@ -38,7 +38,11 @@ export function toHttpError(err: unknown): HttpError {
     case '22P02':
     case '22007':
       return new HttpError(400, 'invalid_value', pgErr.message ?? 'Invalid value');
-    case 'P0001': // raised by our guard triggers (e.g. finalised payroll)
+    case 'P0001': // raised by our functions and guard triggers
+      if (pgErr.message?.startsWith('out_of_stock:')) {
+        const item = pgErr.message.slice('out_of_stock:'.length);
+        return new HttpError(409, 'out_of_stock', `Sorry, ${item} has just sold out`, { item });
+      }
       return new HttpError(409, 'locked', pgErr.message ?? 'Record is locked');
   }
   const e = err as { statusCode?: number; code?: string; message?: string };

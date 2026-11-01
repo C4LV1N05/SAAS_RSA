@@ -53,6 +53,9 @@ param auth0Audience string = 'https://api.saas-rsa.app'
 @description('Shared secret between the Auth0 Post-Login Action and the API (32+ characters).')
 param authActionSecret string
 
+@description('Guest ordering app URL; table QR codes point at <url>/t/<token>.')
+param guestAppUrl string = 'https://order.saas-rsa.app'
+
 // --- Twilio (all optional: without them the worker logs messages instead of sending) ---
 param twilioAccountSid string = ''
 @secure()
@@ -179,6 +182,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AUTH_ISSUER', value: 'https://${auth0Domain}/' }
             { name: 'AUTH_AUDIENCE', value: auth0Audience }
             { name: 'AUTH_ACTION_SECRET', secretRef: 'auth-action-secret' }
+            { name: 'GUEST_APP_URL', value: guestAppUrl }
           ]
           probes: [
             { type: 'Liveness', httpGet: { path: '/health', port: 3000 }, periodSeconds: 30 }

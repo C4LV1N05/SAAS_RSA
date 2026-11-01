@@ -9,11 +9,17 @@ import { registerPayrollRoutes } from './routes/payroll';
 import { registerTipRoutes } from './routes/tips';
 import { registerLogbookRoutes } from './routes/logbook';
 import { INTERNAL_AUTH_ROUTE, registerInternalAuthRoutes } from './routes/internal-auth';
+import { GUEST_PREFIX, registerGuestRoutes } from './routes/guest';
+import { registerServeRoutes } from './routes/serve';
+import type { ServiceEventBus } from './events';
 
 export interface AppOptions extends Deps {
   verify: Verifier;
   /** Shared secret for the Auth0 Action's claims lookup; the route is off without it. */
   authActionSecret?: string;
+  /** Live station updates; omitted in tests that do not need streaming. */
+  events?: ServiceEventBus;
+  guestAppUrl?: string;
   logLevel?: string;
 }
 
@@ -30,7 +36,9 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   app.addHook('onRequest', async (request) => {
-    if (PUBLIC_ROUTES.has(request.routeOptions.url ?? '')) return;
+    const route = request.routeOptions.url ?? '';
+    // Guest routes authenticate with the table session token instead (routes/guest.ts).
+    if (PUBLIC_ROUTES.has(route) || route.startsWith(`${GUEST_PREFIX}/`)) return;
     const header = request.headers.authorization;
     if (!header?.startsWith('Bearer ')) throw new HttpError(401, 'unauthenticated', 'Bearer token required');
     request.auth = await options.verify(header.slice('Bearer '.length));
@@ -54,6 +62,11 @@ export function buildApp(options: AppOptions): FastifyInstance {
   registerPayrollRoutes(app, deps);
   registerTipRoutes(app, deps);
   registerLogbookRoutes(app, deps);
+  registerGuestRoutes(app, deps);
+  registerServeRoutes(app, deps, {
+    ...(options.events ? { events: options.events } : {}),
+    guestAppUrl: options.guestAppUrl ?? 'https://order.saas-rsa.app',
+  });
 
   return app;
 }

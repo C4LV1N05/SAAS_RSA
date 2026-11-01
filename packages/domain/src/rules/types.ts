@@ -61,6 +61,7 @@ export interface RuleValueMap {
   'paye.tax_table': TaxTable;
   'paye.medical_credits_monthly': MedicalCredits;
   'eti.table': EtiTable;
+  'vat.rate_bp': number;
 }
 
 export type RuleKey = keyof RuleValueMap;

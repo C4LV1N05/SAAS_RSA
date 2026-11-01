@@ -11,3 +11,6 @@ export * from './payroll/payslip';
 export * from './tips/distribute';
 export * from './logbook/hashchain';
 export * from './notifications';
+export * from './serve/bill';
+export * from './serve/stock';
+export * from './serve/tips';

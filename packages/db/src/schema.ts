@@ -194,6 +194,7 @@ export const tipPools = pgTable('tip_pools', {
 });
 
 export const shiftTips = pgTable('shift_tips', {
+  paymentId: uuid('payment_id'),
   id: uuid('id').primaryKey().defaultRandom(),
   orgId: uuid('org_id').notNull(),
   locationId: uuid('location_id').notNull(),
@@ -259,4 +260,173 @@ export const notificationOutbox = pgTable('notification_outbox', {
   lastError: text('last_error'),
   createdAt: ts('created_at').notNull().defaultNow(),
   sentAt: ts('sent_at'),
+});
+
+// --- Serve (0007) ---
+const qty = (name: string) => numeric(name, { precision: 12, scale: 3 });
+
+export const menuCategories = pgTable('menu_categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  name: text('name').notNull(),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+export const menuItems = pgTable('menu_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  categoryId: uuid('category_id'),
+  name: text('name').notNull(),
+  description: text('description'),
+  priceCents: cents('price_cents').notNull(),
+  station: text('station').notNull(),
+  available: boolean('available').notNull().default(true),
+  tillCode: text('till_code'),
+  sortOrder: integer('sort_order').notNull().default(0),
+});
+
+export const inventoryItems = pgTable('inventory_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  name: text('name').notNull(),
+  unit: text('unit').notNull().default('each'),
+  onHand: qty('on_hand').notNull().default('0'),
+  reorderLevel: qty('reorder_level'),
+});
+
+export const menuItemComponents = pgTable('menu_item_components', {
+  menuItemId: uuid('menu_item_id').notNull(),
+  inventoryItemId: uuid('inventory_item_id').notNull(),
+  orgId: uuid('org_id').notNull(),
+  quantity: qty('quantity').notNull(),
+});
+
+export const inventoryMovements = pgTable('inventory_movements', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  inventoryItemId: uuid('inventory_item_id').notNull(),
+  delta: qty('delta').notNull(),
+  reason: text('reason').notNull(),
+  orderItemId: uuid('order_item_id'),
+  note: text('note'),
+  createdBy: uuid('created_by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const diningTables = pgTable('dining_tables', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  label: text('label').notNull(),
+  section: text('section'),
+  seats: smallint('seats'),
+  active: boolean('active').notNull().default(true),
+});
+
+export const tableTags = pgTable('table_tags', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  tableId: uuid('table_id').notNull(),
+  token: text('token').notNull(),
+  active: boolean('active').notNull().default(true),
+});
+
+export const tableAssignments = pgTable('table_assignments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  tableId: uuid('table_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  startsAt: ts('starts_at').notNull(),
+  endsAt: ts('ends_at').notNull(),
+});
+
+export const tipCodes = pgTable('tip_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  token: text('token').notNull(),
+  active: boolean('active').notNull().default(true),
+});
+
+export const tabs = pgTable('tabs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  tableId: uuid('table_id').notNull(),
+  status: text('status').notNull().default('pending'),
+  confirmedBy: uuid('confirmed_by'),
+  confirmedAt: ts('confirmed_at'),
+  tillReference: text('till_reference'),
+  openedAt: ts('opened_at').notNull().defaultNow(),
+  closedAt: ts('closed_at'),
+  closedBy: uuid('closed_by'),
+});
+
+export const orders = pgTable('orders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  tabId: uuid('tab_id').notNull(),
+  guestSessionId: uuid('guest_session_id'),
+  placedBy: uuid('placed_by'),
+  idempotencyKey: text('idempotency_key').notNull(),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const orderItems = pgTable('order_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  tabId: uuid('tab_id').notNull(),
+  orderId: uuid('order_id').notNull(),
+  guestSessionId: uuid('guest_session_id'),
+  menuItemId: uuid('menu_item_id').notNull(),
+  name: text('name').notNull(),
+  unitPriceCents: cents('unit_price_cents').notNull(),
+  quantity: integer('quantity').notNull(),
+  station: text('station').notNull(),
+  notes: text('notes'),
+  status: text('status').notNull().default('queued'),
+  statusChangedAt: ts('status_changed_at').notNull().defaultNow(),
+  voidReason: text('void_reason'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const payments = pgTable('payments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull(),
+  locationId: uuid('location_id').notNull(),
+  tabId: uuid('tab_id').notNull(),
+  guestSessionId: uuid('guest_session_id'),
+  mode: text('mode').notNull(),
+  amountCents: cents('amount_cents').notNull(),
+  tipCents: cents('tip_cents').notNull().default(0),
+  tipEmployeeId: uuid('tip_employee_id'),
+  tipSource: text('tip_source'),
+  method: text('method').notNull().default('till'),
+  status: text('status').notNull().default('requested'),
+  tillReference: text('till_reference'),
+  recordedBy: uuid('recorded_by'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+  settledAt: ts('settled_at'),
+});
+
+export const paymentAllocations = pgTable('payment_allocations', {
+  paymentId: uuid('payment_id').notNull(),
+  orderItemId: uuid('order_item_id').notNull(),
+  orgId: uuid('org_id').notNull(),
+  amountCents: cents('amount_cents').notNull(),
+});
+
+export const tillIntegrations = pgTable('till_integrations', {
+  orgId: uuid('org_id').primaryKey(),
+  mode: text('mode').notNull().default('manual'),
+  webhookUrl: text('webhook_url'),
+  signingSecret: text('signing_secret'),
+  active: boolean('active').notNull().default(true),
 });

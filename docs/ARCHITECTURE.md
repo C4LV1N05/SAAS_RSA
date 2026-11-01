@@ -25,6 +25,17 @@ This codebase implements the blueprint in `docs/BLUEPRINT.md` with the changes f
 - **Task 4, infrastructure (Azure):** `infra/azure/main.bicep` in South Africa North: PostgreSQL 16 Flexible Server, Container Apps for the API and worker, and a manual migration job using the API image. CI deploys on every green push to `main` via OIDC. See `docs/DEPLOY_AZURE.md`.
 - **Task 5, integrations:** EMP201 is captured on SARS eFiling, so the system produces its values (`emp201Totals`), not a file. EMP501/IRP5 export to the SARS BRS and Xero/Sage journals build on the coded payslip lines.
 
+## Serve (table ordering alongside the till)
+
+See `docs/SERVE.md` for the flow, guest API and till webhook contract. Key decisions:
+
+- **Alongside the till, not replacing it.** Payment is taken on the till's card machine and recorded with the till slip number; every step is pushed to the till as signed webhooks from a `till_events` outbox.
+- **Guests are a database role.** Table sessions run as `app.role = 'guest'` with `app.tab_id`: restrictive policies limit them to their own tab's orders and payments, and every staff table denies them. Tag and session lookups use SECURITY DEFINER functions that save and restore the caller's settings.
+- **Split bills without double payment.** A payment request claims its items (or amount) immediately, under a per-tab advisory lock; once a share-of-bill payment exists, item mode closes for that tab (`packages/domain/src/serve/bill.ts`).
+- **Stock in the same transaction.** `app.move_stock` locks inventory rows in a fixed order, refuses to go below zero, and writes an append-only movement ledger; voids return stock.
+- **Live screens without Redis.** A trigger on `order_items` calls `pg_notify`; each API replica holds one LISTEN connection and streams events to kitchen and bar screens over SSE (ids only; screens re-fetch through RLS).
+- **VAT** is a rule version (`vat.rate_bp` = 1500) applied to VAT-inclusive menu prices.
+
 ## Assumptions that need sign-off before go-live
 
 Labour lawyer:
@@ -32,6 +43,9 @@ Labour lawyer:
 - Sunday and public holiday minutes count toward the ordinary limits; overtime on those days takes the higher multiplier.
 - Employees above the BCEA earnings threshold get no overtime or Sunday premium but keep public holiday double pay.
 - Weeks run Monday to Sunday.
+
+Registered tax practitioner (Serve):
+- Card tips paid with the bill are recorded as card tips to the waiter and flow through payroll; confirm treatment where tips go straight to a waiter's own account instead.
 
 Registered tax practitioner:
 - PAYE uses the annualise-the-period method; irregular income (bonuses, leave payouts) needs the year-to-date method, not yet implemented.
@@ -47,4 +61,5 @@ Registered tax practitioner:
 - Field-level encryption for ID, tax and bank numbers (columns exist as `bytea`)
 - Real-time manager alerts (SSE or a managed realtime service)
 - Twilio delivery status callbacks (the outbox records the message SID for this)
+- Serve: online payment in the guest app, face verification at clock-in, guest web app and station screens, till vendor adapters
 - Web and mobile clients

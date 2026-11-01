@@ -1,6 +1,8 @@
 /**
- * Notification worker: a long-running process (an Azure Container App with one
- * replica) that delivers queued messages from the notification_outbox table.
+ * Background worker: a long-running process (an Azure Container App with one
+ * replica) that drains two database outboxes:
+ *   - notification_outbox: staff WhatsApp/SMS messages via Twilio
+ *   - till_events: Serve events pushed to the restaurant's till as signed webhooks
  *
  *   DATABASE_URL  postgres://saas_worker:...@host/saas_rsa?sslmode=require
  *   TWILIO_*      see .env.example
@@ -8,6 +10,7 @@
 import pg from 'pg';
 import { processBatch } from './outbox';
 import { providersFromEnv } from './providers';
+import { processTillBatch } from './till';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -26,16 +29,21 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-console.log(`notification worker started (channels: ${providers.map((p) => p.channel).join(', ')})`);
+console.log(`worker started (message channels: ${providers.map((p) => p.channel).join(', ')}; till sync on)`);
 while (running) {
+  let busy = false;
   try {
-    const result = await processBatch(pool, providers);
-    // Drain quickly while there is work; otherwise wait for the next poll.
-    if (result.claimed > 0) continue;
+    busy = (await processBatch(pool, providers)).claimed > 0 || busy;
   } catch (err) {
-    console.error(`outbox poll failed: ${(err as Error).message}`);
+    console.error(`notification poll failed: ${(err as Error).message}`);
   }
-  await new Promise((r) => setTimeout(r, pollMs));
+  try {
+    busy = (await processTillBatch(pool)).claimed > 0 || busy;
+  } catch (err) {
+    console.error(`till poll failed: ${(err as Error).message}`);
+  }
+  // Drain quickly while there is work; otherwise wait for the next poll.
+  if (!busy) await new Promise((r) => setTimeout(r, pollMs));
 }
 await pool.end();
-console.log('notification worker stopped');
+console.log('worker stopped');
