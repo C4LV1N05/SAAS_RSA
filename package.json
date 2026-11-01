@@ -17,7 +17,8 @@
     "dev:api": "pnpm --filter @saas-rsa/api dev",
     "dev:worker": "pnpm --filter @saas-rsa/worker dev",
     "dev:web": "pnpm --filter @saas-rsa/web dev",
-    "demo": "pnpm --filter @saas-rsa/api demo"
+    "demo": "pnpm --filter @saas-rsa/api demo",
+    "docs:check": "node scripts/check-docs.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

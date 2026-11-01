@@ -34,8 +34,10 @@ infra/
   auth0/      Post-Login Action that adds tenant claims to access tokens
 db/
   migrations/ SQL source of truth: tables, RLS policies, immutability triggers
+scripts/
+  check-docs.mjs    CI check that docs name real files and valid diagrams
 docs/
-  ARCHITECTURE.md   Decisions, assumptions awaiting sign-off, next steps
+  ARCHITECTURE.md   The whole system: context, containers, data, security, flows, deployment, roadmap
   SERVE.md          Table ordering: flow, guest API, till webhook contract
   DEPLOY_AZURE.md   One-time Azure, Auth0 and Twilio setup
   BLUEPRINT.md      The original architectural blueprint

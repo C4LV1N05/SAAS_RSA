@@ -25,6 +25,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - name: Docs reference real files and valid diagrams
+        run: pnpm docs:check
       - name: Domain engine tests (BCEA, PAYE/UIF/SDL/ETI, tips, hash chain)
         run: pnpm --filter @saas-rsa/domain test
       - name: Worker tests (Twilio adapters, channel fallback)
